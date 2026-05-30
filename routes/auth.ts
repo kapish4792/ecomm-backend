@@ -1,6 +1,7 @@
 import express from 'express';
 import { protect } from '../middleware/auth.ts';
-import { register, login, refresh, getMe, logout, changePassword } from '../controllers/auth.ts';
+import { register, login, refresh, getMe, logout, changePassword, forgotPassword, resetPassword } from '../controllers/auth.ts';
+import { forgotPasswordLimiter } from '../utils/auth.ts';
 
 export { generateAccessToken, generateRefreshToken, accessCookieOptions, refreshCookieOptions } from '../utils/auth.ts';
 
@@ -14,6 +15,12 @@ router.post("/login", login);
 
 // Change password
 router.post("/change-password", protect, changePassword);
+
+//Forgot Password 
+router.post("/forgot-password", forgotPasswordLimiter, forgotPassword);
+
+//Reset Password
+router.post("/reset-password", resetPassword);
 
 // Refresh token
 router.post("/refresh", refresh);

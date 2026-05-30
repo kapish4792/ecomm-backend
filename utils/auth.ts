@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
@@ -32,3 +33,11 @@ export const refreshCookieOptions = {
   sameSite: "strict" as const,
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
+
+export const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per window
+  message: "Too many password reset attempts, please try again after 15 minutes",
+  standardHeaders: true,
+  legacyHeaders: false,
+});

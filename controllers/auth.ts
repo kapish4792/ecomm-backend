@@ -4,6 +4,9 @@ import jwt from 'jsonwebtoken';
 import dbPool from '../config/db.ts';
 import { generateAccessToken, generateRefreshToken, refreshCookieOptions } from '../utils/auth.ts';
 
+import crypto from 'crypto';
+import sendResetEmail from '../utils/mailer.ts';
+
 // User registration
 export const register = async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
@@ -140,6 +143,72 @@ export const changePassword = async (req: any, res: Response) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+export const forgotPassword = async (req: any, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+
+  // Update query to include 'name'
+  const result = await dbPool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+
+  if (result.rows.length === 0) {
+    // Security: Return same message even if email doesn't exist
+    return res.status(200).json({ message: "If an account exists, a reset link was sent." });
+  }
+
+  // Access the first row of the result
+  const user = result.rows[0];
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  const expires = new Date(Date.now() + 30 * 60 * 1000);
+
+  await dbPool.query(
+    'UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE email = $3',
+    [hashedToken, expires, email]
+  );
+
+  // Now user.name will work
+  await sendResetEmail(email, user.name, resetToken);
+
+  res.status(200).json({ message: "Reset link sent to email." });
+};
+
+export const resetPassword = async (req: any, res: Response) => {
+  const { token } = req.query;
+  const { password } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ message: "Token is missing from the request." });
+  }
+  // 1. Hash the token from the URL to match what's in the DB
+  const hashedToken = crypto.createHash('sha256').update(token as string).digest('hex');
+
+  // 2. Check DB for matching hashed token and valid expiry
+  const userResult = await dbPool.query(
+    'SELECT * FROM users WHERE reset_password_token = $1 AND reset_password_expires > NOW()',
+    [hashedToken]
+  );
+
+  if (userResult.rows.length === 0) {
+    return res.status(400).json({ message: "Token is invalid or has expired." });
+  }
+
+  // 3. Hash the new password and Update
+  const salt = await bcrypt.genSalt(10);
+  const newHashedPassword = await bcrypt.hash(password, salt);
+
+  // 4. Update password and NULL out the token fields (One-time use)
+  await dbPool.query(
+    'UPDATE users SET password = $1, reset_password_token = NULL, reset_password_expires = NULL WHERE id = $2',
+    [newHashedPassword, userResult.rows[0].id]
+  );
+
+  res.status(200).json({ message: "Password updated! You can now log in." });
+}
 
 // Refresh token
 export const refresh = async (req: Request, res: Response) => {
