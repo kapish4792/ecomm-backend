@@ -16,7 +16,7 @@ export const generateRefreshToken = (userId: number) => {
   return jwt.sign(
     { userId },
     process.env.REFRESH_SECRET as string,
-    { expiresIn: "30d" }
+    { expiresIn: "1d" }
   );
 };
 
@@ -31,7 +31,7 @@ export const refreshCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
-  maxAge: 30 * 24 * 60 * 60 * 1000,
+  maxAge: 1 * 24 * 60 * 60 * 1000,
 };
 
 export const forgotPasswordLimiter = rateLimit({
