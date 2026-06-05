@@ -2,12 +2,26 @@ import { z } from 'zod';
 import { ErrorMessage } from '../utils/errorMessages.ts';
 
 export const CreateAttributeSchema = z.object({
+  body: z.object({
+    key: z.string().trim().min(1, 'Attribute key is required'),
+    value: z.string().trim().min(1, 'Attribute value is required'),
+  }),
+});
+
+export const LinkAttributeSchema = z.object({
   params: z.object({
     productId: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
   }),
   body: z.object({
     key: z.string().trim().min(1, 'Attribute key is required'),
     value: z.string().trim().min(1, 'Attribute value is required'),
+  }),
+});
+
+export const UnlinkAttributeSchema = z.object({
+  params: z.object({
+    productId: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
+    attributeId: z.string().uuid('Invalid attribute ID format'),
   }),
 });
 

@@ -10,12 +10,12 @@ import sendResetEmail from '../utils/mailer.ts';
 
 // User registration
 export const register = async (req: Request, res: Response) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, phone } = req.body;
 
   try {
     const existing = await dbPool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
+      "SELECT * FROM users WHERE email = $1 OR phone = $2",
+      [email, phone]
     );
 
     if (existing.rows.length > 0) {
@@ -25,8 +25,8 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await dbPool.query(
-      "INSERT INTO users (name, email, password) VALUES ($1,$2,$3) RETURNING id,name,email",
-      [name, email, hashedPassword]
+      "INSERT INTO users (name, email, password, phone) VALUES ($1,$2,$3,$4) RETURNING id,name,email,phone",
+      [name, email, hashedPassword, phone]
     );
 
     const userId = newUser.rows[0].id;
@@ -249,7 +249,7 @@ export const refresh = async (req: Request, res: Response) => {
 export const getMe = async (req: any, res: Response) => {
   try {
     const user = await dbPool.query(
-      "SELECT id,name,email FROM users WHERE id = $1",
+      "SELECT id,name,email,phone FROM users WHERE id = $1",
       [req.user.userId]
     );
 

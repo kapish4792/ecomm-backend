@@ -24,6 +24,7 @@ export const ErrorMessage = {
 
   // Validation schema error messages
   NAME_REQUIRED: 'Name is required',
+  PHONE_REQUIRED: 'Phone number is required',
   EMAIL_INVALID: 'Invalid email address',
   PASSWORD_MIN_LENGTH: 'Password must be at least 6 characters',
   PASSWORD_REQUIRED: 'Password is required',

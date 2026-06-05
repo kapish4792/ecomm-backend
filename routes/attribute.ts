@@ -7,10 +7,14 @@ import {
   getAttributeById,
   updateAttribute,
   deleteAttribute,
-  getAttributes
+  getAttributes,
+  linkAttribute,
+  unlinkAttribute
 } from '../controllers/attribute.controller.ts';
 import {
   CreateAttributeSchema,
+  LinkAttributeSchema,
+  UnlinkAttributeSchema,
   UpdateAttributeSchema,
   DeleteAttributeSchema,
   GetAttributeByIdSchema
@@ -18,22 +22,28 @@ import {
 
 const router = express.Router();
 
-// Get all attributes
+// Get all unique global attributes
 router.get("/attributes", getAttributes);
+
+// Create a new global attribute
+router.post("/attributes", protect, validate(CreateAttributeSchema), createAttribute);
 
 // Get all attributes of a product
 router.get("/products/:productId/attributes", getAttributesByProduct);
 
-// Create a new attribute for a product
-router.post("/products/:productId/attributes", protect, validate(CreateAttributeSchema), createAttribute);
+// Link an attribute (connectOrCreate) to a product
+router.post("/products/:productId/attributes", protect, validate(LinkAttributeSchema), linkAttribute);
 
-// Get a single attribute by ID
+// Disconnect/Unlink an attribute from a product (does not delete the global attribute)
+router.delete("/products/:productId/attributes/:attributeId", protect, validate(UnlinkAttributeSchema), unlinkAttribute);
+
+// Get a single global attribute by ID
 router.get("/attributes/:id", validate(GetAttributeByIdSchema), getAttributeById);
 
-// Update an attribute by ID
+// Update a global attribute key/value by ID
 router.put("/attributes/:id", protect, validate(UpdateAttributeSchema), updateAttribute);
 
-// Delete an attribute by ID
+// Delete a global attribute completely (removes it from all products)
 router.delete("/attributes/:id", protect, validate(DeleteAttributeSchema), deleteAttribute);
 
 export default router;

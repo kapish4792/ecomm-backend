@@ -20,6 +20,7 @@ model users {
   name                   String           @db.VarChar(100)
   email                  String           @unique @db.VarChar(100)
   password               String           @db.VarChar(255)
+  phone                  String          @unique @db.VarChar(15)
   created_at             DateTime?        @default(now()) @db.Timestamp(6)
   reset_password_token   String?
   reset_password_expires DateTime?        @db.Timestamp(6)
@@ -36,7 +37,7 @@ model Product {
   imageUrl        String
   images          String[]         @default([])
   description     String
-  attributes      ProductAttribute[]
+  attributes      Attribute[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   isDeleted       Boolean          @default(false)
@@ -55,12 +56,11 @@ model ProductVariant {
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
-model ProductAttribute {
-  id        String  @id @default(uuid())
-  key       String
-  value     String
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+model Attribute {
+  id       String    @id @default(uuid())
+  key      String
+  value    String
+  products Product[]
 
-  @@unique([productId, key])
+  @@unique([key, value])
 }

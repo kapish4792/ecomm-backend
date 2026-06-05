@@ -43,7 +43,18 @@ export const createProduct = async (req: Request, res: Response) => {
                 imageUrl,
                 images,
                 attributes: {
-                    create: attributes
+                    connectOrCreate: (attributes || []).map((a: { key: string; value: string }) => ({
+                        where: {
+                            key_value: {
+                                key: a.key,
+                                value: a.value
+                            }
+                        },
+                        create: {
+                            key: a.key,
+                            value: a.value
+                        }
+                    }))
                 },
                 variants: {
                     create: variants // Adds sizes/stock simultaneously

@@ -5,7 +5,8 @@ export const RegisterSchema = z.object({
   body: z.object({
     name: z.string().trim().min(1, ErrorMessage.NAME_REQUIRED),
     email: z.string().trim().email(ErrorMessage.EMAIL_INVALID),
-    password: z.string().min(6, ErrorMessage.PASSWORD_MIN_LENGTH),
+    password: z.string().min(8, ErrorMessage.PASSWORD_MIN_LENGTH),
+    phone: z.string().min(10, ErrorMessage.PHONE_REQUIRED).length(10, "Mobile number must be exactly 10 digits").regex(/^[6-9]\d{9}$/, "Invalid Mobile number"),
   }),
 });
 
