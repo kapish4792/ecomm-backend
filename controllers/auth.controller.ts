@@ -25,7 +25,7 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await dbPool.query(
-      "INSERT INTO users (name, email, password, phone) VALUES ($1,$2,$3,$4) RETURNING id,name,email,phone",
+      "INSERT INTO users (name, email, password, phone) VALUES ($1,$2,$3,$4) RETURNING id,name,email,phone,role_id",
       [name, email, hashedPassword, phone]
     );
 
@@ -39,12 +39,21 @@ export const register = async (req: Request, res: Response) => {
       [userId, refreshToken]
     );
 
+    const roleRes = await dbPool.query("SELECT name FROM roles WHERE id = $1", [newUser.rows[0].role_id]);
+    const roleName = roleRes.rows[0]?.name || "USER";
+
     res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
     return res.status(201).json({
       success: true,
       accessToken,
-      user: newUser.rows[0],
+      user: {
+        id: userId,
+        name: newUser.rows[0].name,
+        email: newUser.rows[0].email,
+        phone: newUser.rows[0].phone,
+        role: roleName,
+      },
     });
   } catch (err) {
     console.error(err);
@@ -58,7 +67,7 @@ export const login = async (req: Request, res: Response) => {
 
   try {
     const user = await dbPool.query(
-      "SELECT * FROM users WHERE email = $1",
+      "SELECT u.*, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = $1",
       [email]
     );
 
@@ -94,6 +103,8 @@ export const login = async (req: Request, res: Response) => {
         id: userId,
         name: user.rows[0].name,
         email: user.rows[0].email,
+        phone: user.rows[0].phone,
+        role: user.rows[0].role,
       },
     });
   } catch (err) {
@@ -249,7 +260,7 @@ export const refresh = async (req: Request, res: Response) => {
 export const getMe = async (req: any, res: Response) => {
   try {
     const user = await dbPool.query(
-      "SELECT id,name,email,phone FROM users WHERE id = $1",
+      "SELECT u.id, u.name, u.email, u.phone, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = $1",
       [req.user.userId]
     );
 
