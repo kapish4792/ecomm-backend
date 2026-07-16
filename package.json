@@ -7,6 +7,9 @@
     "start": "node server.ts",
     "dev": "nodemon server.ts"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
