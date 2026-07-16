@@ -20,7 +20,7 @@ WORKDIR /app
 
 # Install production dependencies + tsx (needed to run .ts files)
 COPY package*.json ./
-RUN npm ci --omit=dev && npm install tsx
+RUN npm ci --omit=dev && npm install tsx prisma
 
 # Copy generated Prisma client from builder (output = "../generated/prisma")
 COPY --from=builder /app/generated ./generated
