@@ -106,23 +106,36 @@ model Order {
   totalAmount     Decimal     @db.Decimal(12, 2) // Calculated subtotal + taxes + shipping
   shippingAddress Json // Immutable JSON snapshot of address block details at point of purchase
   status          OrderStatus @default(PENDING)
-  idempotencyKey  String?     @unique // Structural safeguard tracking unique frontend checkout generation keys
+  expiresAt       DateTime? // Auto-expiry timestamp for PENDING orders (15 min from creation)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   items        OrderItem[]
   transactions Transaction[]
+  events       OrderEvent[] // Full audit trail of state transitions
 
   @@map("orders")
 }
 
+// ==========================================
+// Order State Machine
+// PENDING → CONFIRMED, CANCELLED, FAILED
+// CONFIRMED → PROCESSING, CANCELLED
+// PROCESSING → SHIPPED, CANCELLED
+// SHIPPED → DELIVERED, RETURNED
+// DELIVERED → RETURNED
+// CANCELLED, FAILED, RETURNED → terminal
+// ==========================================
+
 enum OrderStatus {
   PENDING
-  PAYMENT_FAILED
   CONFIRMED
+  PROCESSING
   SHIPPED
   DELIVERED
   CANCELLED
+  FAILED
+  RETURNED
 }
 
 model OrderItem {
@@ -135,6 +148,39 @@ model OrderItem {
   priceAtPurchase  Decimal        @db.Decimal(12, 2) // CRITICAL: Immutable snapshot of the unit price at transaction execution time
 
   @@map("order_items")
+}
+
+// ==========================================
+// 3b. ORDER AUDIT EVENT LOG
+// ==========================================
+
+model OrderEvent {
+  id         String       @id @default(uuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus? // null for initial PENDING creation
+  toStatus   OrderStatus
+  reason     String?      @db.Text // Optional human-readable reason for the transition
+  actor      String?      @db.VarChar(100) // "system", "user:{id}", "webhook", "cron"
+  createdAt  DateTime     @default(now())
+
+  @@map("order_events")
+}
+
+// ==========================================
+// 3c. OUTBOX PATTERN — ASYNC EVENT QUEUE
+// ==========================================
+
+model OutboxEvent {
+  id          String   @id @default(uuid())
+  eventType   String   @db.VarChar(100) // e.g. "order.created", "order.expired", "stock.released"
+  aggregateId String   @db.VarChar(100) // Usually the orderId
+  payload     Json // Full event payload for downstream consumers
+  published   Boolean  @default(false) // Marks the event as picked up by the outbox processor
+  createdAt   DateTime @default(now())
+
+  @@index([published, createdAt])
+  @@map("outbox_events")
 }
 
 // ==========================================
@@ -169,26 +215,7 @@ enum TransactionStatus {
   SUCCESS
   FAILED
   REFUNDED
+  UNKNOWN // Payment status not yet confirmed — webhook reconciles
 }
 
-// ==========================================
-// 5. CACHED IDEMPOTENCY ENGINE LOGS
-// ==========================================
 
-model IdempotencyRecord {
-  id             String            @id @default(uuid())
-  key            String            @unique // Unique Client generated token UUID string passed down via headers
-  requestPath    String // Verify matching routing execution path (e.g., "/api/checkout")
-  status         IdempotencyStatus @default(PROCESSING)
-  responseBody   Json? // Cached return object body tracking processed orders
-  responseStatus Int? // Cached response status codes
-  createdAt      DateTime          @default(now())
-  expiresAt      DateTime // Self cleaning trigger tracking limits (e.g., 24 hours lifecycle)
-
-  @@map("idempotency_records")
-}
-
-enum IdempotencyStatus {
-  PROCESSING
-  COMPLETED
-}
