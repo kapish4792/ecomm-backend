@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          script_timeout: 20m
+          timeout: 20m
           script: |
             echo "🚀 Connecting to production workspace..."
             cd /var/www
