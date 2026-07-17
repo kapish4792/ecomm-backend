@@ -3,7 +3,7 @@ name: Production CI/CD Pipeline
 on:
   push:
     branches:
-      - main  
+      - master  
   repository_dispatch:
     types: [frontend_updated]
 
@@ -27,8 +27,8 @@ jobs:
 
             echo "📦 Syncing repositories..."
             # Navigate to individual project subdirectories inside /var/www and pull their respective changes
-            cd ecomm-backend && git pull origin main && cd ..
-            cd ecomm && git pull origin main && cd ..
+            cd ecomm-backend && git pull origin master && cd ..
+            cd ecomm && git pull origin master && cd ..
 
             echo "🛠️ Rebuilding and updating container images..."
             sudo docker compose up -d --build
