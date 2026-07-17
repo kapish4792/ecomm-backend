@@ -1,0 +1,39 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main  
+  repository_dispatch:
+    types: [frontend_updated]
+
+jobs:
+  deploy:
+    name: Deploy Stack to Hostinger VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Execute Remote SSH Deploy Sequence
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_timeout: 20m
+          script: |
+            echo "🚀 Connecting to production workspace..."
+            cd /var/www
+
+            echo "📦 Syncing repositories..."
+            # Navigate to individual project subdirectories inside /var/www and pull their respective changes
+            cd ecomm-backend && git pull origin main && cd ..
+            cd ecomm && git pull origin main && cd ..
+
+            echo "🛠️ Rebuilding and updating container images..."
+            sudo docker compose up -d --build
+
+            echo "🧹 Pruning unused dangling build layers..."
+            sudo docker image prune -f
+
+            echo "✅ Deployment sequence finished successfully!"
