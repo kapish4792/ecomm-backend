@@ -6,6 +6,7 @@ export const ProductVariantSchema = z.object({
   size: z.string().trim().optional().nullable(),
   color: z.string().trim().optional().nullable(),
   stock: z.number().int().nonnegative(ErrorMessage.STOCK_NEGATIVE).default(0),
+  attributes: z.array(z.lazy(() => ProductAttributeSchema)).optional(),
 });
 
 export const ProductAttributeSchema = z.object({
@@ -26,6 +27,7 @@ export const CreateProductSchema = z.object({
     images: z.array(z.string().trim()).default([]),
     description: z.string().trim().min(1, ErrorMessage.DESCRIPTION_REQUIRED),
     attributes: z.array(ProductAttributeSchema).default([]),
+    globalAttributes: z.array(ProductAttributeSchema).optional(),
     variants: z.array(ProductVariantSchema).min(1, ErrorMessage.VARIANTS_MIN_LENGTH),
   }),
 });
@@ -46,6 +48,7 @@ export const UpdateProductSchema = z.object({
     images: z.array(z.string().trim()).optional(),
     description: z.string().trim().min(1, ErrorMessage.DESCRIPTION_EMPTY).optional(),
     attributes: z.array(ProductAttributeSchema).optional(),
+    globalAttributes: z.array(ProductAttributeSchema).optional(),
     variants: z.array(ProductVariantSchema).optional(),
   }),
 });

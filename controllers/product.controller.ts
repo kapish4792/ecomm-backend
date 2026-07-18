@@ -5,7 +5,7 @@ import { ErrorMessage } from '../utils/errorMessages.ts';
 
 export const createProduct = async (req: Request, res: Response) => {
     try {
-        const { name, price, category, description, imageUrl, images, attributes, variants } = req.body;
+        const { name, price, category, description, imageUrl, images, attributes, globalAttributes, variants } = req.body;
 
         const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
 
@@ -33,6 +33,69 @@ export const createProduct = async (req: Request, res: Response) => {
             }
         }
 
+        // Collect all unique global/product attributes
+        const allProductAttributes: { key: string; value: string }[] = [];
+        const seenAttributes = new Set<string>();
+
+        const addUniqueAttribute = (key: string, value: string) => {
+            const trimmedKey = key.trim();
+            const trimmedValue = value.trim();
+            const identifier = `${trimmedKey.toLowerCase()}:${trimmedValue.toLowerCase()}`;
+            if (!seenAttributes.has(identifier)) {
+                seenAttributes.add(identifier);
+                allProductAttributes.push({ key: trimmedKey, value: trimmedValue });
+            }
+        };
+
+        // Add initial attributes (from either globalAttributes or attributes field)
+        const initialAttributes = globalAttributes || attributes || [];
+        for (const attr of initialAttributes) {
+            if (attr && attr.key && attr.value) {
+                addUniqueAttribute(attr.key, attr.value);
+            }
+        }
+
+        // Parse and format variants
+        const formattedVariants = (variants || []).map((v: any) => {
+            let size = v.size || null;
+            let color = v.color || null;
+            const variantAttributes: { key: string; value: string }[] = [];
+
+            if (Array.isArray(v.attributes)) {
+                for (const attr of v.attributes) {
+                    if (attr && attr.key && attr.value) {
+                        const lowerKey = attr.key.toLowerCase();
+                        if (lowerKey === 'size') {
+                            size = attr.value;
+                        } else if (lowerKey === 'color') {
+                            color = attr.value;
+                        }
+                        // Also add all variant attributes to the product attribute list
+                        addUniqueAttribute(attr.key, attr.value);
+                        variantAttributes.push({ key: attr.key.trim(), value: attr.value.trim() });
+                    }
+                }
+            } else {
+                // If they passed direct size/color without an attributes array, mock the attributes array for consistency
+                if (v.size) {
+                    addUniqueAttribute('Size', String(v.size));
+                    variantAttributes.push({ key: 'Size', value: String(v.size).trim() });
+                }
+                if (v.color) {
+                    addUniqueAttribute('Color', String(v.color));
+                    variantAttributes.push({ key: 'Color', value: String(v.color).trim() });
+                }
+            }
+
+            return {
+                sku: v.sku,
+                stock: v.stock !== undefined ? Number(v.stock) : 0,
+                size: size ? String(size) : null,
+                color: color ? String(color) : null,
+                attributes: variantAttributes
+            };
+        });
+
         const product = await prisma.product.create({
             data: {
                 name,
@@ -40,10 +103,10 @@ export const createProduct = async (req: Request, res: Response) => {
                 price,
                 category,
                 description,
-                imageUrl,
-                images,
+                imageUrl: imageUrl || '',
+                images: images || [],
                 attributes: {
-                    connectOrCreate: (attributes || []).map((a: { key: string; value: string }) => ({
+                    connectOrCreate: allProductAttributes.map((a) => ({
                         where: {
                             key_value: {
                                 key: a.key,
@@ -57,7 +120,20 @@ export const createProduct = async (req: Request, res: Response) => {
                     }))
                 },
                 variants: {
-                    create: variants // Adds sizes/stock simultaneously
+                    create: formattedVariants.map((v: any) => ({
+                        sku: v.sku,
+                        stock: v.stock,
+                        size: v.size,
+                        color: v.color,
+                        attributes: {
+                            connect: v.attributes.map((a: any) => ({
+                                key_value: {
+                                    key: a.key,
+                                    value: a.value
+                                }
+                            }))
+                        }
+                    }))
                 }
             },
             include: { variants: true, attributes: true }

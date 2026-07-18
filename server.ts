@@ -9,6 +9,9 @@ import productRoutes from './routes/product.ts';
 import variantRoutes from './routes/variant.ts';
 import attributeRoutes from './routes/attribute.ts';
 import orderRoutes from './routes/order.ts';
+import uploadRoutes from './routes/upload.ts';
+import path from 'path';
+import { uploadDir } from './middleware/upload.ts';
 
 
 dotenv.config();
@@ -39,6 +42,10 @@ app.use('/api', attributeRoutes);
 
 // Order API — State Machine
 app.use('/api/orders', orderRoutes);
+
+// Upload API — File Management
+app.use('/api/upload', uploadRoutes);
+app.use('/uploads', express.static(path.resolve(uploadDir)));
 
 
 // ─────────────────────────────────────────────────────────────────────────────

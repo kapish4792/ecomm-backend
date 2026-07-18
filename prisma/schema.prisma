@@ -50,6 +50,7 @@ model users {
   refresh_tokens refresh_tokens[]
   orders         Order[]
   transactions   Transaction[]
+  mediaFiles     MediaFile[]
 }
 
 // ==========================================
@@ -84,13 +85,15 @@ model ProductVariant {
   productId  String
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems OrderItem[] // Relation link to purchased line items
+  attributes Attribute[]
 }
 
 model Attribute {
-  id       String    @id @default(uuid())
+  id       String           @id @default(uuid())
   key      String
   value    String
   products Product[]
+  variants ProductVariant[]
 
   @@unique([key, value])
 }
@@ -218,4 +221,20 @@ enum TransactionStatus {
   UNKNOWN // Payment status not yet confirmed — webhook reconciles
 }
 
+// ==========================================
+// 5. MEDIA / FILE UPLOADS
+// ==========================================
 
+model MediaFile {
+  id           String   @id @default(uuid())
+  originalName String   @db.VarChar(255)
+  filename     String   @db.VarChar(255)
+  fileUrl      String   @db.Text
+  mimeType     String   @db.VarChar(100)
+  size         Int
+  uploadedBy   Int?
+  user         users?   @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@map("media_files")
+}

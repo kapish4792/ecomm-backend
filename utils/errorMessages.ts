@@ -89,4 +89,14 @@ export const ErrorMessage = {
   CATEGORY_EMPTY:              'Category cannot be empty',
   IMAGE_URL_EMPTY:             'Image URL cannot be empty',
   DESCRIPTION_EMPTY:           'Description cannot be empty',
+
+  // ─── File Upload ──────────────────────────────────────────────────────────
+  FILE_TOO_LARGE:              'File is too large. Maximum allowed size is 50MB.',
+  INVALID_FILE_TYPE:           'Invalid file type. Only PDFs and standard images (JPEG, PNG, WEBP, GIF) are allowed.',
+  FILE_NOT_FOUND:              'File not found.',
+  MISSING_CHUNK:               'Missing intermediate chunk {{index}}. Upload failed.',
+  UPLOAD_FAILED:               'File upload failed. Please try again.',
+  DELETE_FAILED:               'Failed to delete the file.',
+  NO_FILE_PROVIDED:            'No file provided. Please attach a file to the request.',
+  FETCH_FILE_FAILED:           'Failed to fetch file.',
 } as const;
