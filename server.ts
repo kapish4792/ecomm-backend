@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.ts';
 import productRoutes from './routes/product.ts';
 import variantRoutes from './routes/variant.ts';
 import attributeRoutes from './routes/attribute.ts';
+import categoryRoutes from './routes/category.ts';
 import orderRoutes from './routes/order.ts';
 import uploadRoutes from './routes/upload.ts';
 import path from 'path';
@@ -39,6 +40,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api', variantRoutes);
 app.use('/api', attributeRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Order API — State Machine
 app.use('/api/orders', orderRoutes);

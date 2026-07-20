@@ -5,11 +5,11 @@ import fs from 'fs';
 
 // ─── Storage Directories ───────────────────────────────────────────────────────
 export const uploadDir = path.join(process.cwd(), 'uploads');
-export const chunkDir  = path.join(uploadDir, 'chunks');
+export const chunkDir = path.join(uploadDir, 'chunks');
 
 // Auto-create directories on module load
 fs.mkdirSync(uploadDir, { recursive: true });
-fs.mkdirSync(chunkDir,  { recursive: true });
+fs.mkdirSync(chunkDir, { recursive: true });
 
 // ─── Storage Engine ────────────────────────────────────────────────────────────
 const storage = multer.diskStorage({
@@ -24,17 +24,25 @@ const storage = multer.diskStorage({
 
   filename: (req, file, cb) => {
     const chunkIndex = req.body?.chunkIndex ?? req.headers['x-chunk-index'];
-    const uploadId   = req.body?.uploadId   ?? req.headers['x-upload-id'];
-    const ext        = path.extname(file.originalname).toLowerCase();
+    const uploadId = req.body?.uploadId ?? req.headers['x-upload-id'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    const baseName = path.basename(file.originalname, path.extname(file.originalname));
+    const sanitized = baseName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')   // replace non-alphanumeric with dash
+      .replace(/^-+|-+$/g, '');       // trim leading/trailing dashes
 
     if (chunkIndex !== undefined && uploadId) {
       // Chunk piece: <uploadId>_<chunkIndex>.tmp
       cb(null, `${uploadId}_${chunkIndex}.tmp`);
     } else {
-      // Single file: <uuid><ext>
-      const uniqueId           = crypto.randomUUID();
+      // Single file: <timestamp>-<sanitized-name><ext>
+      const uniqueId = crypto.randomUUID();
       (req as any).generatedId = uniqueId;
-      cb(null, `${uniqueId}${ext}`);
+      const timestamp = Date.now();
+      const filename = `${timestamp}-${sanitized}${ext}`;
+      (req as any).finalFilename = filename;
+      cb(null, filename);
     }
   },
 });
@@ -47,6 +55,8 @@ const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
     'image/png',
     'image/webp',
     'image/gif',
+    'video/mp4',
+    'video/webm',
   ];
 
   if (file.mimetype === 'image/svg+xml') {
@@ -56,7 +66,7 @@ const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   if (allowed.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PDFs and standard images (JPEG, PNG, WEBP, GIF) are allowed.'));
+    cb(new Error('Invalid file type. Only PDFs, standard images (JPEG, PNG, WEBP, GIF), and videos (MP4, WEBM) are allowed.'));
   }
 };
 

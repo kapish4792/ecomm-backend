@@ -2,48 +2,34 @@ import express from 'express';
 import { protect, authorize } from '../middleware/auth.ts';
 import { validate } from '../middleware/validate.ts';
 import {
-  createAttribute,
-  getAttributesByProduct,
-  getAttributeById,
-  updateAttribute,
-  deleteAttribute,
   getAttributes,
-  linkAttribute,
-  unlinkAttribute
+  createAttribute,
+  getAttributeValues,
+  createAttributeValue,
+  deleteAttribute,
 } from '../controllers/attribute.controller.ts';
 import {
   CreateAttributeSchema,
-  LinkAttributeSchema,
-  UnlinkAttributeSchema,
-  UpdateAttributeSchema,
+  CreateAttributeValueSchema,
   DeleteAttributeSchema,
-  GetAttributeByIdSchema
+  GetAttributeValuesSchema,
 } from '../schemas/attribute.schema.ts';
 
 const router = express.Router();
 
-// Get all unique global attributes
-router.get("/attributes", getAttributes);
+// GET /api/attributes — list all attribute names and their values
+router.get('/attributes', getAttributes);
 
-// Create a new global attribute (protected, admin/superadmin only)
-router.post("/attributes", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(CreateAttributeSchema), createAttribute);
+// POST /api/attributes — create a new attribute name (ADMIN/SUPERADMIN)
+router.post('/attributes', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(CreateAttributeSchema), createAttribute);
 
-// Get all attributes of a product
-router.get("/products/:productId/attributes", getAttributesByProduct);
+// POST /api/attributes/:id/values — add a value to an attribute (ADMIN/SUPERADMIN)
+router.post('/attributes/:id/values', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(CreateAttributeValueSchema), createAttributeValue);
 
-// Link an attribute (connectOrCreate) to a product (protected, admin/superadmin only)
-router.post("/products/:productId/attributes", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(LinkAttributeSchema), linkAttribute);
+// GET /api/attributes/:id/values — get all values for a specific attribute
+router.get('/attributes/:id/values', validate(GetAttributeValuesSchema), getAttributeValues);
 
-// Disconnect/Unlink an attribute from a product (protected, admin/superadmin only)
-router.delete("/products/:productId/attributes/:attributeId", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(UnlinkAttributeSchema), unlinkAttribute);
-
-// Get a single global attribute by ID
-router.get("/attributes/:id", validate(GetAttributeByIdSchema), getAttributeById);
-
-// Update a global attribute key/value by ID (protected, admin/superadmin only)
-router.put("/attributes/:id", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(UpdateAttributeSchema), updateAttribute);
-
-// Delete a global attribute completely (protected, admin/superadmin only)
-router.delete("/attributes/:id", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(DeleteAttributeSchema), deleteAttribute);
+// DELETE /api/attributes/:id — delete attribute and all its values (ADMIN/SUPERADMIN)
+router.delete('/attributes/:id', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(DeleteAttributeSchema), deleteAttribute);
 
 export default router;

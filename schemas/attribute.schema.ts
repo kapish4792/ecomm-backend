@@ -1,48 +1,32 @@
 import { z } from 'zod';
-import { ErrorMessage } from '../utils/errorMessages.ts';
 
+// ── POST /api/attributes — create attribute name (e.g., "Color") ─────────────
 export const CreateAttributeSchema = z.object({
   body: z.object({
-    key: z.string().trim().min(1, 'Attribute key is required'),
+    name: z.string().trim().min(1, 'Attribute name is required'),
+  }),
+});
+
+// ── POST /api/attributes/:id/values — add a value to an attribute ────────────
+export const CreateAttributeValueSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid attribute ID'),
+  }),
+  body: z.object({
     value: z.string().trim().min(1, 'Attribute value is required'),
   }),
 });
 
-export const LinkAttributeSchema = z.object({
-  params: z.object({
-    productId: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
-  }),
-  body: z.object({
-    key: z.string().trim().min(1, 'Attribute key is required'),
-    value: z.string().trim().min(1, 'Attribute value is required'),
-  }),
-});
-
-export const UnlinkAttributeSchema = z.object({
-  params: z.object({
-    productId: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
-    attributeId: z.string().uuid('Invalid attribute ID format'),
-  }),
-});
-
-export const UpdateAttributeSchema = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid attribute ID format'),
-  }),
-  body: z.object({
-    key: z.string().trim().min(1, 'Attribute key is required').optional(),
-    value: z.string().trim().min(1, 'Attribute value is required').optional(),
-  }),
-});
-
+// ── DELETE /api/attributes/:id ───────────────────────────────────────────────
 export const DeleteAttributeSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid attribute ID format'),
+    id: z.string().uuid('Invalid attribute ID'),
   }),
 });
 
-export const GetAttributeByIdSchema = z.object({
+// ── GET /api/attributes/:id/values ──────────────────────────────────────────
+export const GetAttributeValuesSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid attribute ID format'),
+    id: z.string().uuid('Invalid attribute ID'),
   }),
 });

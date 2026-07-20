@@ -3,229 +3,234 @@ import prisma from '../lib/prisma.ts';
 import { sendError, ErrorCode } from '../utils/errors.ts';
 import { ErrorMessage } from '../utils/errorMessages.ts';
 
+// ── Helper: resolve (or create) attribute values for a variant ───────────────
+// Given [{ name: "Color", value: "Red" }, ...], upserts Attribute + AttributeValue
+// rows and returns an array of attributeValueId integers.
+async function resolveAttributeValueIds(
+  attrs: { name: string; value: string }[]
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const attr of attrs) {
+    const attribute = await prisma.attribute.upsert({
+      where:  { name: attr.name },
+      update: {},
+      create: { name: attr.name },
+    });
+    const attrValue = await prisma.attributeValue.upsert({
+      where:  { attributeId_value: { attributeId: attribute.id, value: attr.value } },
+      update: {},
+      create: { attributeId: attribute.id, value: attr.value },
+    });
+    ids.push(attrValue.id);
+  }
+  return ids;
+}
+
+// ── Prisma include shape reused across all product queries ───────────────────
+const productInclude = {
+  variants: {
+    include: {
+      attributes: {
+        include: {
+          attributeValue: {
+            include: { attribute: true },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/products
+// Creates a product with all variants and their EAV attribute values.
+// Body: { name, basePrice, category, description, imageUrl?, images?, status?, variants[] }
+// ─────────────────────────────────────────────────────────────────────────────
 export const createProduct = async (req: Request, res: Response) => {
-    try {
-        const { name, price, category, description, imageUrl, images, attributes, globalAttributes, variants } = req.body;
+  try {
+    const {
+      name, basePrice, category, displayCategory,
+      imageUrl, images, description, status, variants,
+    } = req.body;
 
-        const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
+    // Generate unique slug
+    const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
+    const existingSlugs = (await prisma.product.findMany({
+      where:  { slug: { startsWith: baseSlug } },
+      select: { slug: true },
+    })).map((p) => p.slug);
 
-        // Find existing slugs starting with this base slug
-        const existingProducts = await prisma.product.findMany({
-            where: {
-                slug: {
-                    startsWith: baseSlug
-                }
-            },
-            select: {
-                slug: true
-            }
-        });
-
-        let slug = baseSlug;
-        if (existingProducts.length > 0) {
-            const existingSlugs = existingProducts.map(p => p.slug);
-            if (existingSlugs.includes(baseSlug)) {
-                let count = 1;
-                while (existingSlugs.includes(`${baseSlug}-${count}`)) {
-                    count++;
-                }
-                slug = `${baseSlug}-${count}`;
-            }
-        }
-
-        // Collect all unique global/product attributes
-        const allProductAttributes: { key: string; value: string }[] = [];
-        const seenAttributes = new Set<string>();
-
-        const addUniqueAttribute = (key: string, value: string) => {
-            const trimmedKey = key.trim();
-            const trimmedValue = value.trim();
-            const identifier = `${trimmedKey.toLowerCase()}:${trimmedValue.toLowerCase()}`;
-            if (!seenAttributes.has(identifier)) {
-                seenAttributes.add(identifier);
-                allProductAttributes.push({ key: trimmedKey, value: trimmedValue });
-            }
-        };
-
-        // Add initial attributes (from either globalAttributes or attributes field)
-        const initialAttributes = globalAttributes || attributes || [];
-        for (const attr of initialAttributes) {
-            if (attr && attr.key && attr.value) {
-                addUniqueAttribute(attr.key, attr.value);
-            }
-        }
-
-        // Parse and format variants
-        const formattedVariants = (variants || []).map((v: any) => {
-            let size = v.size || null;
-            let color = v.color || null;
-            const variantAttributes: { key: string; value: string }[] = [];
-
-            if (Array.isArray(v.attributes)) {
-                for (const attr of v.attributes) {
-                    if (attr && attr.key && attr.value) {
-                        const lowerKey = attr.key.toLowerCase();
-                        if (lowerKey === 'size') {
-                            size = attr.value;
-                        } else if (lowerKey === 'color') {
-                            color = attr.value;
-                        }
-                        // Also add all variant attributes to the product attribute list
-                        addUniqueAttribute(attr.key, attr.value);
-                        variantAttributes.push({ key: attr.key.trim(), value: attr.value.trim() });
-                    }
-                }
-            } else {
-                // If they passed direct size/color without an attributes array, mock the attributes array for consistency
-                if (v.size) {
-                    addUniqueAttribute('Size', String(v.size));
-                    variantAttributes.push({ key: 'Size', value: String(v.size).trim() });
-                }
-                if (v.color) {
-                    addUniqueAttribute('Color', String(v.color));
-                    variantAttributes.push({ key: 'Color', value: String(v.color).trim() });
-                }
-            }
-
-            return {
-                sku: v.sku,
-                stock: v.stock !== undefined ? Number(v.stock) : 0,
-                size: size ? String(size) : null,
-                color: color ? String(color) : null,
-                attributes: variantAttributes
-            };
-        });
-
-        const product = await prisma.product.create({
-            data: {
-                name,
-                slug,
-                price,
-                category,
-                description,
-                imageUrl: imageUrl || '',
-                images: images || [],
-                attributes: {
-                    connectOrCreate: allProductAttributes.map((a) => ({
-                        where: {
-                            key_value: {
-                                key: a.key,
-                                value: a.value
-                            }
-                        },
-                        create: {
-                            key: a.key,
-                            value: a.value
-                        }
-                    }))
-                },
-                variants: {
-                    create: formattedVariants.map((v: any) => ({
-                        sku: v.sku,
-                        stock: v.stock,
-                        size: v.size,
-                        color: v.color,
-                        attributes: {
-                            connect: v.attributes.map((a: any) => ({
-                                key_value: {
-                                    key: a.key,
-                                    value: a.value
-                                }
-                            }))
-                        }
-                    }))
-                }
-            },
-            include: { variants: true, attributes: true }
-        });
-        return res.status(201).json({ success: true, data: product });
-    } catch (error: any) {
-        console.error("Create product error:", error);
-        if (error?.code === 'P2002') {
-            return sendError(res, 400, ErrorCode.CONFLICT, ErrorMessage.PRODUCT_ALREADY_EXISTS, {
-                target: error.meta?.target || ['slug']
-            });
-        }
-        return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.CREATE_PRODUCT_FAILED);
+    let slug = baseSlug;
+    if (existingSlugs.includes(baseSlug)) {
+      let count = 1;
+      while (existingSlugs.includes(`${baseSlug}-${count}`)) count++;
+      slug = `${baseSlug}-${count}`;
     }
+
+    // Resolve all attribute values up front (outside transaction to avoid long lock)
+    const resolvedVariants: { sku: string; price: number; stock: number; attrValueIds: string[] }[] = [];
+    for (const v of variants) {
+      const attrValueIds = await resolveAttributeValueIds(v.attributes ?? []);
+      resolvedVariants.push({
+        sku:         v.sku,
+        price:       Number(v.price),
+        stock:       v.stock ?? 0,
+        attrValueIds,
+      });
+    }
+
+    // Create product + variants + junction rows in one transaction
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          name,
+          slug,
+          basePrice: Number(basePrice),
+          category,
+          displayCategory: displayCategory ?? null,
+          imageUrl:  imageUrl ?? '',
+          images:    images   ?? [],
+          description,
+          status:    status   ?? 'DRAFT',
+          variants: {
+            create: resolvedVariants.map((v) => ({
+              sku:   v.sku,
+              price: v.price,
+              stock: v.stock,
+              attributes: {
+                create: v.attrValueIds.map((avId) => ({ attributeValueId: avId })),
+              },
+            })),
+          },
+        },
+        include: productInclude,
+      });
+      return created;
+    });
+
+    return res.status(201).json({ success: true, data: product });
+  } catch (error: any) {
+    console.error('Create product error:', error);
+    if (error?.code === 'P2002') {
+      return sendError(res, 400, ErrorCode.CONFLICT, ErrorMessage.PRODUCT_ALREADY_EXISTS, {
+        target: error.meta?.target || ['slug'],
+      });
+    }
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.CREATE_PRODUCT_FAILED);
+  }
 };
 
-export const getProducts = async (req: Request, res: Response) => {
-    try {
-        const products = await prisma.product.findMany({
-            where: { isDeleted: false },
-            include: { variants: true, attributes: true }
-        });
-        return res.json({ success: true, data: products });
-    } catch (error) {
-        console.error("Get products error:", error);
-        return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_PRODUCTS_FAILED);
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/products
+// Returns all PUBLISHED, non-deleted products with variants and resolved attributes.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getProducts = async (_req: Request, res: Response) => {
+  try {
+    const products = await prisma.product.findMany({
+      where:   { isDeleted: false, status: 'PUBLISHED' },
+      include: productInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json({ success: true, data: products });
+  } catch (error) {
+    console.error('Get products error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_PRODUCTS_FAILED);
+  }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/products/:id
+// Returns a single product (any status, for admins to preview drafts).
+// ─────────────────────────────────────────────────────────────────────────────
 export const getProductById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    try {
-        const product = await prisma.product.findUnique({
-            where: { id: String(id) },
-            include: { variants: true, attributes: true }
-        });
-        if (!product || product.isDeleted) {
-            return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
-        }
-        return res.json({ success: true, data: product });
-    } catch (error) {
-        console.error("Get product by id error:", error);
-        return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_PRODUCTS_FAILED);
+  const { id } = req.params;
+  try {
+    const product = await prisma.product.findUnique({
+      where:   { id: String(id) },
+      include: productInclude,
+    });
+    if (!product || product.isDeleted) {
+      return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
+    return res.json({ success: true, data: product });
+  } catch (error) {
+    console.error('Get product by id error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_PRODUCTS_FAILED);
+  }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/products/:id
+// Updates core product fields only. Variants are managed via /variants endpoints.
+// Body: { name?, basePrice?, category?, displayCategory?, imageUrl?, images?, description?, status? }
+// ─────────────────────────────────────────────────────────────────────────────
 export const updateProduct = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    try {
-        const product = await prisma.product.findUnique({
-            where: { id: String(id) }
-        });
-        if (!product || product.isDeleted) {
-            return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
-        }
-
-        const { attributes, variants, ...updateData } = req.body;
-
-        const updatedProduct = await prisma.product.update({
-            where: { id: String(id) },
-            data: updateData,
-            include: { variants: true, attributes: true }
-        });
-        return res.json({ success: true, data: updatedProduct });
-    } catch (error: any) {
-        console.error("Update product error:", error);
-        if (error?.code === 'P2002') {
-            return sendError(res, 400, ErrorCode.CONFLICT, ErrorMessage.PRODUCT_ALREADY_EXISTS, {
-                target: error.meta?.target || ['slug']
-            });
-        }
-        return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.UPDATE_PRODUCT_FAILED);
+  const { id } = req.params;
+  try {
+    const product = await prisma.product.findUnique({ where: { id: String(id) } });
+    if (!product || product.isDeleted) {
+      return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
+
+    const { name, basePrice, category, displayCategory, imageUrl, images, description, status } = req.body;
+
+    // Regenerate slug if name changed
+    let slug = product.slug;
+    if (name && name !== product.name) {
+      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const existing = (await prisma.product.findMany({
+        where:  { slug: { startsWith: baseSlug }, id: { not: product.id } },
+        select: { slug: true },
+      })).map((p) => p.slug);
+      slug = baseSlug;
+      if (existing.includes(baseSlug)) {
+        let count = 1;
+        while (existing.includes(`${baseSlug}-${count}`)) count++;
+        slug = `${baseSlug}-${count}`;
+      }
+    }
+
+    const updated = await prisma.product.update({
+      where: { id: String(id) },
+      data:  {
+        ...(name            !== undefined && { name, slug }),
+        ...(basePrice       !== undefined && { basePrice: Number(basePrice) }),
+        ...(category        !== undefined && { category }),
+        ...(displayCategory !== undefined && { displayCategory }),
+        ...(imageUrl        !== undefined && { imageUrl }),
+        ...(images          !== undefined && { images }),
+        ...(description     !== undefined && { description }),
+        ...(status          !== undefined && { status }),
+      },
+      include: productInclude,
+    });
+    return res.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('Update product error:', error);
+    if (error?.code === 'P2002') {
+      return sendError(res, 400, ErrorCode.CONFLICT, ErrorMessage.PRODUCT_ALREADY_EXISTS, {
+        target: error.meta?.target || ['slug'],
+      });
+    }
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.UPDATE_PRODUCT_FAILED);
+  }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/products/:id
+// Soft delete — sets isDeleted: true.
+// ─────────────────────────────────────────────────────────────────────────────
 export const deleteProduct = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    try {
-        const product = await prisma.product.findUnique({
-            where: { id: String(id) }
-        });
-        if (!product || product.isDeleted) {
-            return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
-        }
-
-        await prisma.product.update({
-            where: { id: String(id) },
-            data: { isDeleted: true }
-        });
-        return res.status(200).json({ success: true, message: ErrorMessage.PRODUCT_DELETED });
-    } catch (error) {
-        console.error("Delete product error:", error);
-        return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.DELETE_PRODUCT_FAILED);
+  const { id } = req.params;
+  try {
+    const product = await prisma.product.findUnique({ where: { id: String(id) } });
+    if (!product || product.isDeleted) {
+      return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
+    await prisma.product.update({ where: { id: String(id) }, data: { isDeleted: true } });
+    return res.status(200).json({ success: true, message: ErrorMessage.PRODUCT_DELETED });
+  } catch (error) {
+    console.error('Delete product error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.DELETE_PRODUCT_FAILED);
+  }
 };

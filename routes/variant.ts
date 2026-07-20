@@ -2,38 +2,38 @@ import express from 'express';
 import { protect, authorize } from '../middleware/auth.ts';
 import { validate } from '../middleware/validate.ts';
 import {
-  createVariant,
+  getVariants,
   getVariantsByProduct,
   getVariantById,
+  createVariant,
   updateVariant,
   deleteVariant,
-  getVariants
 } from '../controllers/variant.controller.ts';
 import {
   CreateVariantSchema,
   UpdateVariantSchema,
   DeleteVariantSchema,
-  GetVariantByIdSchema
+  GetVariantByIdSchema,
 } from '../schemas/variant.schema.ts';
 
 const router = express.Router();
 
-// Get all variants
-router.get("/variants", getVariants);
+// GET /api/variants — list all variants across all products
+router.get('/variants', getVariants);
 
-// Get all variants of a product
-router.get("/products/:productId/variants", getVariantsByProduct);
+// GET /api/products/:productId/variants — list variants for a product
+router.get('/products/:productId/variants', getVariantsByProduct);
 
-// Create a new variant for a product (protected, admin/superadmin only)
-router.post("/products/:productId/variants", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(CreateVariantSchema), createVariant);
+// POST /api/products/:productId/variants — add variant to product (ADMIN/SUPERADMIN)
+router.post('/products/:productId/variants', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(CreateVariantSchema), createVariant);
 
-// Get a single variant by ID
-router.get("/variants/:id", validate(GetVariantByIdSchema), getVariantById);
+// GET /api/variants/:id — get single variant with attributes
+router.get('/variants/:id', validate(GetVariantByIdSchema), getVariantById);
 
-// Update a variant by ID (protected, admin/superadmin only)
-router.put("/variants/:id", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(UpdateVariantSchema), updateVariant);
+// PUT /api/variants/:id — update variant (ADMIN/SUPERADMIN)
+router.put('/variants/:id', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(UpdateVariantSchema), updateVariant);
 
-// Delete a variant by ID (protected, admin/superadmin only)
-router.delete("/variants/:id", protect, authorize(["ADMIN", "SUPERADMIN"]), validate(DeleteVariantSchema), deleteVariant);
+// DELETE /api/variants/:id — delete variant (ADMIN/SUPERADMIN)
+router.delete('/variants/:id', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(DeleteVariantSchema), deleteVariant);
 
 export default router;

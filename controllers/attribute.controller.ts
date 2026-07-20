@@ -1,202 +1,122 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.ts';
 import { sendError, ErrorCode } from '../utils/errors.ts';
-import { ErrorMessage } from '../utils/errorMessages.ts';
 
-// Create an attribute globally (or return existing if duplicate key/value)
+// ─────────────────────────────────────────────────────────────────────────────
+// Attribute Admin API
+// Manages global attribute names (e.g., "Color", "Size").
+// Attribute values are created automatically during variant create/update.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/attributes — list all attribute names with their values
+export const getAttributes = async (_req: Request, res: Response) => {
+  try {
+    const attributes = await prisma.attribute.findMany({
+      include: { values: { orderBy: { value: 'asc' } } },
+      orderBy: { name: 'asc' },
+    });
+    return res.json({ success: true, data: attributes });
+  } catch (error) {
+    console.error('Get attributes error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to fetch attributes');
+  }
+};
+
+// POST /api/attributes — create a new attribute name
 export const createAttribute = async (req: Request, res: Response) => {
-  const { key, value } = req.body;
-
+  const { name } = req.body;
   try {
     const attribute = await prisma.attribute.upsert({
-      where: {
-        key_value: { key, value }
-      },
+      where:  { name },
       update: {},
-      create: { key, value }
+      create: { name },
+      include: { values: true },
     });
-
     return res.status(201).json({ success: true, data: attribute });
   } catch (error) {
-    console.error("Create attribute error:", error);
+    console.error('Create attribute error:', error);
     return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to create attribute');
   }
 };
 
-// Get all global attributes
-export const getAttributes = async (req: Request, res: Response) => {
-  try {
-    const attributes = await prisma.attribute.findMany();
-    return res.json({ success: true, data: attributes });
-  } catch (error) {
-    console.error("Get all attributes error:", error);
-    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to fetch all attributes');
-  }
-};
-
-// Get all attributes for a specific product
-export const getAttributesByProduct = async (req: Request, res: Response) => {
-  const { productId } = req.params;
-
-  try {
-    const product = await prisma.product.findUnique({
-      where: { id: String(productId) },
-      include: { attributes: true }
-    });
-    if (!product || product.isDeleted) {
-      return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
-    }
-
-    return res.json({ success: true, data: product.attributes });
-  } catch (error) {
-    console.error("Get attributes by product error:", error);
-    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to fetch product attributes');
-  }
-};
-
-// Get a single global attribute by ID
-export const getAttributeById = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
+// GET /api/attributes/:id/values — list all values for an attribute
+export const getAttributeValues = async (req: Request, res: Response) => {
+  const id = String(req.params.id);
   try {
     const attribute = await prisma.attribute.findUnique({
-      where: { id: String(id) }
+      where:   { id },
+      include: { values: { orderBy: { value: 'asc' } } },
     });
     if (!attribute) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, 'Attribute not found');
     }
-
     return res.json({ success: true, data: attribute });
   } catch (error) {
-    console.error("Get attribute by id error:", error);
-    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to fetch attribute');
+    console.error('Get attribute values error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to fetch attribute values');
   }
 };
 
-// Update a global attribute's key/value by ID
-export const updateAttribute = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { key, value } = req.body;
-
+// POST /api/attributes/:id/values — add a value to an attribute
+export const createAttributeValue = async (req: Request, res: Response) => {
+  const attributeId = String(req.params.id);
+  const { value } = req.body;
   try {
-    const attribute = await prisma.attribute.findUnique({
-      where: { id: String(id) }
-    });
+    const attribute = await prisma.attribute.findUnique({ where: { id: attributeId } });
     if (!attribute) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, 'Attribute not found');
     }
 
-    const updatedAttribute = await prisma.attribute.update({
-      where: { id: String(id) },
-      data: {
-        key,
-        value
-      }
-    });
+    const valuesToCreate = String(value)
+      .split(',')
+      .map((val) => val.trim())
+      .filter((val) => val.length > 0);
 
-    return res.json({ success: true, data: updatedAttribute });
-  } catch (error: any) {
-    console.error("Update attribute error:", error);
-    if (error?.code === 'P2002') {
-      return sendError(
-        res,
-        400,
-        ErrorCode.CONFLICT,
-        `An attribute with the combination key "${key}" and value "${value}" already exists.`
-      );
+    if (valuesToCreate.length === 0) {
+      return sendError(res, 400, ErrorCode.VALIDATION_ERROR, 'Attribute value is required');
     }
-    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to update attribute');
+
+    const createdValues = [];
+    for (const val of valuesToCreate) {
+      const attributeValue = await prisma.attributeValue.upsert({
+        where: {
+          attributeId_value: {
+            attributeId,
+            value: val,
+          },
+        },
+        update: {},
+        create: {
+          attributeId,
+          value: val,
+        },
+      });
+      createdValues.push(attributeValue);
+    }
+
+    // Return array if multiple were passed, or single object if just one
+    return res.status(201).json({
+      success: true,
+      data: createdValues.length === 1 ? createdValues[0] : createdValues,
+    });
+  } catch (error) {
+    console.error('Create attribute value error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to create attribute value');
   }
 };
 
-// Delete a global attribute completely
+// DELETE /api/attributes/:id — delete attribute and all its values (cascades junction rows)
 export const deleteAttribute = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
+  const id = String(req.params.id);
   try {
-    const attribute = await prisma.attribute.findUnique({
-      where: { id: String(id) }
-    });
+    const attribute = await prisma.attribute.findUnique({ where: { id } });
     if (!attribute) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, 'Attribute not found');
     }
-
-    await prisma.attribute.delete({
-      where: { id: String(id) }
-    });
-
-    return res.json({ success: true, message: 'Attribute deleted successfully' });
+    await prisma.attribute.delete({ where: { id } });
+    return res.json({ success: true, message: `Attribute "${attribute.name}" and all its values deleted` });
   } catch (error) {
-    console.error("Delete attribute error:", error);
+    console.error('Delete attribute error:', error);
     return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to delete attribute');
-  }
-};
-
-// Link an attribute (creates it globally if it doesn't exist) to a product
-export const linkAttribute = async (req: Request, res: Response) => {
-  const { productId } = req.params;
-  const { key, value } = req.body;
-
-  try {
-    // Verify product exists
-    const product = await prisma.product.findUnique({
-      where: { id: String(productId) }
-    });
-    if (!product || product.isDeleted) {
-      return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
-    }
-
-    // Upsert the global attribute
-    const attribute = await prisma.attribute.upsert({
-      where: {
-        key_value: { key, value }
-      },
-      update: {},
-      create: { key, value }
-    });
-
-    // Link it to the product
-    await prisma.product.update({
-      where: { id: String(productId) },
-      data: {
-        attributes: {
-          connect: { id: attribute.id }
-        }
-      }
-    });
-
-    return res.json({ success: true, data: attribute });
-  } catch (error) {
-    console.error("Link attribute error:", error);
-    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to link attribute to product');
-  }
-};
-
-// Disconnect/Unlink an attribute from a product
-export const unlinkAttribute = async (req: Request, res: Response) => {
-  const { productId, attributeId } = req.params;
-
-  try {
-    // Verify product exists
-    const product = await prisma.product.findUnique({
-      where: { id: String(productId) }
-    });
-    if (!product || product.isDeleted) {
-      return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
-    }
-
-    await prisma.product.update({
-      where: { id: String(productId) },
-      data: {
-        attributes: {
-          disconnect: { id: String(attributeId) }
-        }
-      }
-    });
-
-    return res.json({ success: true, message: 'Attribute disconnected from product successfully' });
-  } catch (error) {
-    console.error("Unlink attribute error:", error);
-    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to unlink attribute');
   }
 };

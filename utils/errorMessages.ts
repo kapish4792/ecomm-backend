@@ -99,4 +99,16 @@ export const ErrorMessage = {
   DELETE_FAILED:               'Failed to delete the file.',
   NO_FILE_PROVIDED:            'No file provided. Please attach a file to the request.',
   FETCH_FILE_FAILED:           'Failed to fetch file.',
+
+  // ─── Category ──────────────────────────────────────────────────────────────
+  CATEGORY_NOT_FOUND:          'Category not found',
+  CATEGORY_ALREADY_EXISTS:     'A category with this name or slug already exists',
+  FETCH_CATEGORIES_FAILED:     'Failed to fetch categories',
+  CREATE_CATEGORY_FAILED:      'Failed to create category',
+  UPDATE_CATEGORY_FAILED:      'Failed to update category',
+  DELETE_CATEGORY_FAILED:      'Failed to delete category',
+  CATEGORY_DELETED:            'Category deleted successfully',
+  CATEGORY_NAME_REQUIRED:      'Category name is required',
+  CATEGORY_NAME_EMPTY:         'Category name cannot be empty',
+  CATEGORY_ID_INVALID:         'Invalid category ID',
 } as const;

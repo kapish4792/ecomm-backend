@@ -36,11 +36,11 @@ export const uploadFile = (req: Request, res: Response) => {
     }
 
     // ── Parse chunk metadata (header takes priority over body field) ──
-    const rawChunkIndex  = req.headers['x-chunk-index']  ?? req.body?.chunkIndex;
+    const rawChunkIndex = req.headers['x-chunk-index'] ?? req.body?.chunkIndex;
     const rawTotalChunks = req.headers['x-total-chunks'] ?? req.body?.totalChunks;
-    const uploadId       = (req.headers['x-upload-id']   ?? req.body?.uploadId) as string | undefined;
+    const uploadId = (req.headers['x-upload-id'] ?? req.body?.uploadId) as string | undefined;
 
-    const chunkIndex  = rawChunkIndex  !== undefined ? parseInt(rawChunkIndex  as string, 10) : null;
+    const chunkIndex = rawChunkIndex !== undefined ? parseInt(rawChunkIndex as string, 10) : null;
     const totalChunks = rawTotalChunks !== undefined ? parseInt(rawTotalChunks as string, 10) : null;
     const originalName = req.file.originalname;
 
@@ -63,18 +63,23 @@ export const uploadFile = (req: Request, res: Response) => {
         }
 
         // ── Final chunk: assemble all pieces ──
-        const fileId       = crypto.randomUUID();
-        const ext          = path.extname(originalName).toLowerCase();
-        const finalFilename = `${fileId}${ext}`;
-        const finalPath    = path.join(uploadDir, finalFilename);
-        const writeStream  = fs.createWriteStream(finalPath);
+        const fileId = crypto.randomUUID();
+        const ext = path.extname(originalName).toLowerCase();
+        const baseName = path.basename(originalName, path.extname(originalName));
+        const sanitized = baseName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        const finalFilename = `${Date.now()}-${sanitized}${ext}`;
+        const finalPath = path.join(uploadDir, finalFilename);
+        const writeStream = fs.createWriteStream(finalPath);
 
         for (let i = 0; i < totalChunks; i++) {
           const chunkPath = path.join(chunkDir, `${uploadId}_${i}.tmp`);
 
           if (!fs.existsSync(chunkPath)) {
             writeStream.destroy();
-            fs.unlink(finalPath, () => {});
+            fs.unlink(finalPath, () => { });
             return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.MISSING_CHUNK.replace('{{index}}', String(i)));
           }
 
@@ -88,14 +93,14 @@ export const uploadFile = (req: Request, res: Response) => {
         });
 
         const finalSize = fs.statSync(finalPath).size;
-        const mimeType  = req.file.mimetype;
-        const fileUrl   = `${req.protocol}://${req.get('host')}/uploads/${finalFilename}`;
+        const mimeType = req.file.mimetype;
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${finalFilename}`;
 
         // Raw pg INSERT — faster than Prisma for simple writes
         const result = await dbPool.query(
-          `INSERT INTO media_files (id, original_name, filename, file_url, mime_type, size, uploaded_by)
+          `INSERT INTO media_files (id, "originalName", filename, "fileUrl", "mimeType", size, "uploadedBy")
            VALUES ($1, $2, $3, $4, $5, $6, $7)
-           RETURNING id, original_name, filename, file_url, mime_type, size, created_at`,
+           RETURNING id, "originalName", filename, "fileUrl", "mimeType", size, "createdAt"`,
           [fileId, originalName, finalFilename, fileUrl, mimeType, finalSize, uploadedBy]
         );
 
@@ -110,15 +115,15 @@ export const uploadFile = (req: Request, res: Response) => {
       // ════════════════════════════════════════════════════════════════════════
       // CASE B: SINGLE-FILE UPLOAD (< 5 MB or small files without chunk headers)
       // ════════════════════════════════════════════════════════════════════════
-      const fileId   = (req as any).generatedId as string;
-      const fileUrl  = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+      const fileId = (req as any).generatedId as string;
+      const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
       const mimeType = req.file.mimetype;
-      const size     = req.file.size;
+      const size = req.file.size;
 
       const result = await dbPool.query(
-        `INSERT INTO media_files (id, original_name, filename, file_url, mime_type, size, uploaded_by)
+        `INSERT INTO media_files (id, "originalName", filename, "fileUrl", "mimeType", size, "uploadedBy")
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, original_name, filename, file_url, mime_type, size, created_at`,
+         RETURNING id, "originalName", filename, "fileUrl", "mimeType", size, "createdAt"`,
         [fileId, originalName, req.file.filename, fileUrl, mimeType, size, uploadedBy]
       );
 
@@ -137,7 +142,102 @@ export const uploadFile = (req: Request, res: Response) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET FILE BY ID  —  GET /api/upload/:id
+// LIST ALL MEDIA  —  GET /api/upload
+// Returns all media files, paginated.
+// Query params:
+//   page  (default: 1)
+//   limit (default: 20, max: 100)
+// ─────────────────────────────────────────────────────────────────────────────
+export const listFiles = async (req: Request, res: Response) => {
+  try {
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? '1',  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? '20', 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const [dataResult, countResult] = await Promise.all([
+      dbPool.query(
+        `SELECT id, "originalName", filename, "fileUrl", "mimeType", size, "uploadedBy", "createdAt"
+         FROM media_files
+         ORDER BY "createdAt" DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      ),
+      dbPool.query('SELECT COUNT(*) FROM media_files'),
+    ]);
+
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    return res.status(200).json({
+      success: true,
+      data: dataResult.rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('List files error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_FILE_FAILED);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCH MEDIA  —  GET /api/upload/search?q=<name>
+// Case-insensitive search on the original filename.
+// Query params:
+//   q     (required) — search term
+//   page  (default: 1)
+//   limit (default: 20, max: 100)
+// ─────────────────────────────────────────────────────────────────────────────
+export const searchFiles = async (req: Request, res: Response) => {
+  try {
+    const q = ((req.query.q as string) ?? '').trim();
+    if (!q) {
+      return sendError(res, 400, ErrorCode.BAD_REQUEST, 'Search query "q" is required.');
+    }
+
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? '1',  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? '20', 10) || 20));
+    const offset = (page - 1) * limit;
+    const pattern = `%${q}%`;
+
+    const [dataResult, countResult] = await Promise.all([
+      dbPool.query(
+        `SELECT id, "originalName", filename, "fileUrl", "mimeType", size, "uploadedBy", "createdAt"
+         FROM media_files
+         WHERE "originalName" ILIKE $1 OR filename ILIKE $1
+         ORDER BY "createdAt" DESC
+         LIMIT $2 OFFSET $3`,
+        [pattern, limit, offset]
+      ),
+      dbPool.query(
+        `SELECT COUNT(*) FROM media_files
+         WHERE "originalName" ILIKE $1 OR filename ILIKE $1`,
+        [pattern]
+      ),
+    ]);
+
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    return res.status(200).json({
+      success: true,
+      query: q,
+      data: dataResult.rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Search files error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_FILE_FAILED);
+  }
+};
+
 // Redirects the browser directly to the stored file URL.
 // Works natively with <img> tags, PDF previewers, video players, etc.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +246,7 @@ export const getFileById = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const result = await dbPool.query(
-      'SELECT file_url FROM media_files WHERE id = $1',
+      'SELECT "fileUrl" FROM media_files WHERE id = $1',
       [id]
     );
 
@@ -154,7 +254,7 @@ export const getFileById = async (req: Request, res: Response) => {
       return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.FILE_NOT_FOUND);
     }
 
-    return res.redirect(result.rows[0].file_url);
+    return res.redirect(result.rows[0].fileUrl);
   } catch (error) {
     console.error('Get file error:', error);
     return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_FILE_FAILED);

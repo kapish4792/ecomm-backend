@@ -58,7 +58,7 @@ export const createOrder = async (req: Request, res: Response) => {
     // ── Step 1: Fetch variants to get their product IDs ──────────────────────
     const variants = await prisma.productVariant.findMany({
       where: { id: { in: variantIds } },
-      include: { product: { select: { id: true, name: true } } },
+      select: { id: true, sku: true, stock: true, price: true, productId: true, product: { select: { id: true, name: true } } },
     });
 
     // Validate all variants exist
@@ -100,28 +100,11 @@ export const createOrder = async (req: Request, res: Response) => {
           });
         }
 
-        // 2d. Calculate total amount
-        const variantPriceMap: Record<string, { price: number; name: string }> = {};
-        for (const variant of variants) {
-          const price = Number(variant.product.name);
-          variantPriceMap[variant.id] = { price, name: variant.product.name };
-        }
-
-        // Fetch actual product prices
-        const productIds = [...new Set(variants.map((v) => v.productId))];
-        const products = await tx.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, price: true },
-        });
-        const productPriceMap: Record<string, number> = {};
-        for (const p of products) {
-          productPriceMap[p.id] = Number(p.price);
-        }
-
+        // 2d. Calculate total amount — price comes from variant (EAV model)
         let totalAmount = 0;
         const orderItemsData = items.map((item: any) => {
           const variant = variants.find((v) => v.id === item.variantId)!;
-          const unitPrice = productPriceMap[variant.productId];
+          const unitPrice = Number(variant.price); // variant-level price snapshot
           totalAmount += unitPrice * item.quantity;
           return {
             productVariantId: item.variantId,
@@ -147,7 +130,7 @@ export const createOrder = async (req: Request, res: Response) => {
             items: {
               include: {
                 productVariant: {
-                  include: { product: { select: { name: true, imageUrl: true } } },
+                  select: { id: true, sku: true, price: true, product: { select: { name: true, imageUrl: true } } },
                 },
               },
             },
@@ -280,7 +263,20 @@ export const listOrders = async (req: Request, res: Response) => {
           items: {
             include: {
               productVariant: {
-                select: { sku: true, size: true, color: true },
+                select: {
+                  sku: true,
+                  price: true,
+                  attributes: {
+                    select: {
+                      attributeValue: {
+                        select: {
+                          value: true,
+                          attribute: { select: { name: true } },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
