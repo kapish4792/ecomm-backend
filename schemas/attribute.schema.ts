@@ -30,3 +30,10 @@ export const GetAttributeValuesSchema = z.object({
     id: z.string().uuid('Invalid attribute ID'),
   }),
 });
+
+// ── DELETE /api/attributes/values/:id ─────────────────────────────────────────
+export const DeleteAttributeValueSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid attribute value ID'),
+  }),
+});

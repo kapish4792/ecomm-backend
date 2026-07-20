@@ -120,3 +120,19 @@ export const deleteAttribute = async (req: Request, res: Response) => {
     return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to delete attribute');
   }
 };
+
+// DELETE /api/attributes/values/:id — delete a specific attribute value
+export const deleteAttributeValue = async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  try {
+    const attributeValue = await prisma.attributeValue.findUnique({ where: { id } });
+    if (!attributeValue) {
+      return sendError(res, 404, ErrorCode.NOT_FOUND, 'Attribute value not found');
+    }
+    await prisma.attributeValue.delete({ where: { id } });
+    return res.json({ success: true, message: `Attribute value "${attributeValue.value}" deleted successfully` });
+  } catch (error) {
+    console.error('Delete attribute value error:', error);
+    return sendError(res, 500, ErrorCode.SERVER_ERROR, 'Failed to delete attribute value');
+  }
+};

@@ -7,12 +7,14 @@ import {
   getAttributeValues,
   createAttributeValue,
   deleteAttribute,
+  deleteAttributeValue,
 } from '../controllers/attribute.controller.ts';
 import {
   CreateAttributeSchema,
   CreateAttributeValueSchema,
   DeleteAttributeSchema,
   GetAttributeValuesSchema,
+  DeleteAttributeValueSchema,
 } from '../schemas/attribute.schema.ts';
 
 const router = express.Router();
@@ -31,5 +33,8 @@ router.get('/attributes/:id/values', validate(GetAttributeValuesSchema), getAttr
 
 // DELETE /api/attributes/:id — delete attribute and all its values (ADMIN/SUPERADMIN)
 router.delete('/attributes/:id', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(DeleteAttributeSchema), deleteAttribute);
+
+// DELETE /api/attributes/values/:id — delete a specific attribute value (ADMIN/SUPERADMIN)
+router.delete('/attributes/values/:id', protect, authorize(['ADMIN', 'SUPERADMIN']), validate(DeleteAttributeValueSchema), deleteAttributeValue);
 
 export default router;
