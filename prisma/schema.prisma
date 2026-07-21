@@ -58,27 +58,27 @@ model users {
 // ==========================================
 
 enum ProductStatus {
-  DRAFT     // Hidden from public listings
+  DRAFT // Hidden from public listings
   PUBLISHED // Visible to all
 }
 
 model Product {
-  id              String           @id @default(uuid())
-  name            String
-  slug            String           @unique
-  basePrice       Decimal          @db.Decimal(12, 2) // Display / listing price
-  category        String
-  displayCategory String?
-  imageUrl        String           @default("")
-  images          String[]         @default([])
-  description     String           @db.Text
-  status          ProductStatus    @default(DRAFT)    // DRAFT = hidden, PUBLISHED = visible
-  isDeleted       Boolean          @default(false)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  variants        ProductVariant[]
-  categoryId      Int?
-  categoryRelation Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  id               String           @id @default(uuid())
+  name             String
+  slug             String           @unique
+  basePrice        Decimal          @db.Decimal(12, 2) // Display / listing price
+  category         String
+  displayCategory  String?
+  imageUrl         String           @default("")
+  images           String[]         @default([])
+  description      String           @db.Text
+  status           ProductStatus    @default(DRAFT) // DRAFT = hidden, PUBLISHED = visible
+  isDeleted        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  variants         ProductVariant[]
+  categoryId       Int?
+  categoryRelation Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([category])
   @@index([status])
@@ -89,7 +89,7 @@ model Product {
 model Category {
   id          Int       @id @default(autoincrement())
   name        String    @unique @db.VarChar(100)
-  slug        String    @unique @db.VarChar(120)   // URL-safe identifier
+  slug        String    @unique @db.VarChar(120) // URL-safe identifier
   description String?   @db.Text
   imageUrl    String?   @db.VarChar(500)
   isActive    Boolean   @default(true)
@@ -97,23 +97,21 @@ model Category {
   updatedAt   DateTime  @updatedAt
   products    Product[]
 
-  @@index([slug])        // fast slug-based lookups
-  @@index([isActive])    // fast active/inactive filtering
+  @@index([slug]) // fast slug-based lookups
+  @@index([isActive]) // fast active/inactive filtering
   @@map("categories")
 }
 
-// Global attribute definitions — e.g., "Color", "Size", "Material"
 model Attribute {
-  id     String           @id @default(uuid())
+  id     String           @id @default(dbgenerated("concat('attr_', floor(random() * 90000 + 10000)::text)"))
   name   String           @unique @db.VarChar(50)
   values AttributeValue[]
 
   @@map("attributes")
 }
 
-// Specific values per attribute — e.g., "Red", "XL", "Leather"
 model AttributeValue {
-  id          String                  @id @default(uuid())
+  id          String                  @id @default(dbgenerated("concat('val_', floor(random() * 90000 + 10000)::text)"))
   attributeId String
   attribute   Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
   value       String                  @db.VarChar(100)
@@ -125,7 +123,7 @@ model AttributeValue {
 
 // The actual sellable item — each SKU is a unique combination of attribute values
 model ProductVariant {
-  id         String                  @id @default(uuid())
+  id         String                  @id @default(dbgenerated("concat('var_', floor(random() * 90000 + 10000)::text)"))
   productId  String
   product    Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   sku        String                  @unique

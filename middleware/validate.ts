@@ -16,18 +16,20 @@ export const validate = (schema: z.ZodTypeAny) => {
         req.body = parsed.body;
       }
       if (parsed.query !== undefined) {
-        // req.query is read-only (getter only) in some versions of Express/Node. Mutate in-place.
-        for (const key of Object.keys(req.query)) {
-          delete req.query[key];
-        }
-        Object.assign(req.query, parsed.query);
+        Object.defineProperty(req, 'query', {
+          value: parsed.query,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
       }
       if (parsed.params !== undefined) {
-        // req.params can also be read-only in some environments. Mutate in-place.
-        for (const key of Object.keys(req.params)) {
-          delete req.params[key];
-        }
-        Object.assign(req.params, parsed.params);
+        Object.defineProperty(req, 'params', {
+          value: parsed.params,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
       }
       next();
     } catch (error) {

@@ -12,12 +12,12 @@ async function resolveAttributeValueIds(
   const ids: string[] = [];
   for (const attr of attrs) {
     const attribute = await prisma.attribute.upsert({
-      where:  { name: attr.name },
+      where: { name: attr.name },
       update: {},
       create: { name: attr.name },
     });
     const attrValue = await prisma.attributeValue.upsert({
-      where:  { attributeId_value: { attributeId: attribute.id, value: attr.value } },
+      where: { attributeId_value: { attributeId: attribute.id, value: attr.value } },
       update: {},
       create: { attributeId: attribute.id, value: attr.value },
     });
@@ -56,7 +56,7 @@ export const createProduct = async (req: Request, res: Response) => {
     // Generate unique slug
     const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
     const existingSlugs = (await prisma.product.findMany({
-      where:  { slug: { startsWith: baseSlug } },
+      where: { slug: { startsWith: baseSlug } },
       select: { slug: true },
     })).map((p) => p.slug);
 
@@ -72,9 +72,9 @@ export const createProduct = async (req: Request, res: Response) => {
     for (const v of variants) {
       const attrValueIds = await resolveAttributeValueIds(v.attributes ?? []);
       resolvedVariants.push({
-        sku:         v.sku,
-        price:       Number(v.price),
-        stock:       v.stock ?? 0,
+        sku: v.sku,
+        price: Number(v.price),
+        stock: v.stock ?? 0,
         attrValueIds,
       });
     }
@@ -88,13 +88,13 @@ export const createProduct = async (req: Request, res: Response) => {
           basePrice: Number(basePrice),
           category,
           displayCategory: displayCategory ?? null,
-          imageUrl:  imageUrl ?? '',
-          images:    images   ?? [],
+          imageUrl: imageUrl ?? '',
+          images: images ?? [],
           description,
-          status:    status   ?? 'DRAFT',
+          status: status ?? 'DRAFT',
           variants: {
             create: resolvedVariants.map((v) => ({
-              sku:   v.sku,
+              sku: v.sku,
               price: v.price,
               stock: v.stock,
               attributes: {
@@ -125,13 +125,37 @@ export const createProduct = async (req: Request, res: Response) => {
 // Returns all PUBLISHED, non-deleted products with variants and resolved attributes.
 // ─────────────────────────────────────────────────────────────────────────────
 export const getProducts = async (_req: Request, res: Response) => {
+  const { page, limit } = _req.query as any;
+  const pageNum = Number(page) || 1;
+  const limitNum = Number(limit) || 10;
+  const skip = (pageNum - 1) * limitNum;
+  const take = limitNum;
+
+  const where = { isDeleted: false, status: 'PUBLISHED' as const };
+
   try {
-    const products = await prisma.product.findMany({
-      where:   { isDeleted: false, status: 'PUBLISHED' },
-      include: productInclude,
-      orderBy: { createdAt: 'desc' },
+    const [products, total] = await prisma.$transaction([
+      prisma.product.findMany({
+        where,
+        skip,
+        take,
+        include: productInclude,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: products,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+        hasNext: skip + take < total,
+      },
     });
-    return res.json({ success: true, data: products });
   } catch (error) {
     console.error('Get products error:', error);
     return sendError(res, 500, ErrorCode.SERVER_ERROR, ErrorMessage.FETCH_PRODUCTS_FAILED);
@@ -146,7 +170,7 @@ export const getProductById = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const product = await prisma.product.findUnique({
-      where:   { id: String(id) },
+      where: { id: String(id) },
       include: productInclude,
     });
     if (!product || product.isDeleted) {
@@ -179,7 +203,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     if (name && name !== product.name) {
       const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       const existing = (await prisma.product.findMany({
-        where:  { slug: { startsWith: baseSlug }, id: { not: product.id } },
+        where: { slug: { startsWith: baseSlug }, id: { not: product.id } },
         select: { slug: true },
       })).map((p) => p.slug);
       slug = baseSlug;
@@ -192,15 +216,15 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     const updated = await prisma.product.update({
       where: { id: String(id) },
-      data:  {
-        ...(name            !== undefined && { name, slug }),
-        ...(basePrice       !== undefined && { basePrice: Number(basePrice) }),
-        ...(category        !== undefined && { category }),
+      data: {
+        ...(name !== undefined && { name, slug }),
+        ...(basePrice !== undefined && { basePrice: Number(basePrice) }),
+        ...(category !== undefined && { category }),
         ...(displayCategory !== undefined && { displayCategory }),
-        ...(imageUrl        !== undefined && { imageUrl }),
-        ...(images          !== undefined && { images }),
-        ...(description     !== undefined && { description }),
-        ...(status          !== undefined && { status }),
+        ...(imageUrl !== undefined && { imageUrl }),
+        ...(images !== undefined && { images }),
+        ...(description !== undefined && { description }),
+        ...(status !== undefined && { status }),
       },
       include: productInclude,
     });

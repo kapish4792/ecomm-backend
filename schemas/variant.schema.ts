@@ -25,7 +25,7 @@ export const CreateVariantSchema = z.object({
 // ── PUT /api/variants/:id ────────────────────────────────────────────────────
 export const UpdateVariantSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid variant ID format'),
+    id: z.string().regex(/^var_\d{5}$/, 'Invalid variant ID format'),
   }),
   body: z.object({
     sku:        z.string().trim().min(1, ErrorMessage.SKU_REQUIRED).optional(),
@@ -41,13 +41,13 @@ export const UpdateVariantSchema = z.object({
 // ── DELETE /api/variants/:id ─────────────────────────────────────────────────
 export const DeleteVariantSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid variant ID format'),
+    id: z.string().regex(/^var_\d{5}$/, 'Invalid variant ID format'),
   }),
 });
 
 // ── GET /api/variants/:id ────────────────────────────────────────────────────
 export const GetVariantByIdSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid variant ID format'),
+    id: z.string().regex(/^var_\d{5}$/, 'Invalid variant ID format'),
   }),
 });

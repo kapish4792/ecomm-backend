@@ -53,6 +53,6 @@ export const ListCategoriesSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().optional().default(10),
-    isActive: z.enum(['true', 'false']).optional().transform((val) => val === 'true'),
+    isActive: z.enum(['true', 'false']).optional().transform((val) => val === undefined ? undefined : val === 'true'),
   }),
 });

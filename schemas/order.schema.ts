@@ -18,7 +18,7 @@ const ShippingAddressSchema = z.object({
 
 // Single order line item
 const OrderItemInputSchema = z.object({
-  variantId: z.string().uuid('Variant ID must be a valid UUID'),
+  variantId: z.string().regex(/^var_\d{5}$/, 'Variant ID must be a valid variant ID'),
   quantity:  z.number().int().positive('Quantity must be a positive integer'),
 });
 

@@ -10,8 +10,10 @@ import { ErrorMessage } from '../utils/errorMessages.ts';
 export const listCategories = async (req: Request, res: Response) => {
   try {
     const { page, limit, isActive } = req.query as any;
-    const skip = (Number(page) - 1) * Number(limit);
-    const take = Number(limit);
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+    const take = limitNum;
 
     const where: any = {};
     if (isActive !== undefined) {
@@ -84,8 +86,10 @@ export const getCategoryProducts = async (req: Request, res: Response) => {
     }
 
     const { page, limit } = req.query as any;
-    const skip = (Number(page) - 1) * Number(limit);
-    const take = Number(limit);
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
+    const take = limitNum;
 
     const where = { categoryId: id, isDeleted: false, status: 'PUBLISHED' as const };
 

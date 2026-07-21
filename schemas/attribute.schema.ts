@@ -10,7 +10,7 @@ export const CreateAttributeSchema = z.object({
 // ── POST /api/attributes/:id/values — add a value to an attribute ────────────
 export const CreateAttributeValueSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid attribute ID'),
+    id: z.string().regex(/^attr_\d{5}$/, 'Invalid attribute ID'),
   }),
   body: z.object({
     value: z.string().trim().min(1, 'Attribute value is required'),
@@ -20,20 +20,20 @@ export const CreateAttributeValueSchema = z.object({
 // ── DELETE /api/attributes/:id ───────────────────────────────────────────────
 export const DeleteAttributeSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid attribute ID'),
+    id: z.string().regex(/^attr_\d{5}$/, 'Invalid attribute ID'),
   }),
 });
 
 // ── GET /api/attributes/:id/values ──────────────────────────────────────────
 export const GetAttributeValuesSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid attribute ID'),
+    id: z.string().regex(/^attr_\d{5}$/, 'Invalid attribute ID'),
   }),
 });
 
 // ── DELETE /api/attributes/values/:id ─────────────────────────────────────────
 export const DeleteAttributeValueSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid attribute value ID'),
+    id: z.string().regex(/^val_\d{5}$/, 'Invalid attribute value ID'),
   }),
 });

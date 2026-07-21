@@ -52,6 +52,7 @@ const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   const allowed = [
     'application/pdf',
     'image/jpeg',
+    'image/avif',
     'image/png',
     'image/webp',
     'image/gif',
