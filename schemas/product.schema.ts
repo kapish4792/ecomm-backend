@@ -31,7 +31,7 @@ export const CreateProductSchema = z.object({
     imageUrl:        z.string().trim().optional().default(''),
     images:          z.array(z.string().trim()).default([]),
     description:     z.string().trim().min(1, ErrorMessage.DESCRIPTION_REQUIRED),
-    status:          z.enum(['DRAFT', 'PUBLISHED']).optional().default('DRAFT'),
+    status:          z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional().default('DRAFT'),
     variants:        z.array(ProductVariantSchema).min(1, ErrorMessage.VARIANTS_MIN_LENGTH),
   }),
 });
@@ -39,7 +39,7 @@ export const CreateProductSchema = z.object({
 // ── PUT /api/products/:id ────────────────────────────────────────────────────
 export const UpdateProductSchema = z.object({
   params: z.object({
-    id: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
+    id: z.string().min(1, ErrorMessage.PRODUCT_ID_INVALID),
   }),
   body: z.object({
     name:            z.string().trim().min(1, ErrorMessage.PRODUCT_NAME_EMPTY).optional(),
@@ -52,20 +52,20 @@ export const UpdateProductSchema = z.object({
     imageUrl:        z.string().trim().min(1, ErrorMessage.IMAGE_URL_EMPTY).optional(),
     images:          z.array(z.string().trim()).optional(),
     description:     z.string().trim().min(1, ErrorMessage.DESCRIPTION_EMPTY).optional(),
-    status:          z.enum(['DRAFT', 'PUBLISHED']).optional(),
+    status:          z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
   }),
 });
 
 // ── DELETE /api/products/:id ─────────────────────────────────────────────────
 export const DeleteProductSchema = z.object({
   params: z.object({
-    id: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
+    id: z.string().min(1, ErrorMessage.PRODUCT_ID_INVALID),
   }),
 });
 
 // ── GET /api/products/:id ────────────────────────────────────────────────────
 export const GetProductByIdSchema = z.object({
   params: z.object({
-    id: z.string().uuid(ErrorMessage.PRODUCT_ID_INVALID),
+    id: z.string().min(1, ErrorMessage.PRODUCT_ID_INVALID),
   }),
 });

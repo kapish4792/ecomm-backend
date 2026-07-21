@@ -131,7 +131,7 @@ export const getProducts = async (_req: Request, res: Response) => {
   const skip = (pageNum - 1) * limitNum;
   const take = limitNum;
 
-  const where = { isDeleted: false, status: 'PUBLISHED' as const };
+  const where = { isDeleted: false };
 
   try {
     const [products, total] = await prisma.$transaction([
@@ -167,13 +167,20 @@ export const getProducts = async (_req: Request, res: Response) => {
 // Returns a single product (any status, for admins to preview drafts).
 // ─────────────────────────────────────────────────────────────────────────────
 export const getProductById = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   try {
-    const product = await prisma.product.findUnique({
-      where: { id: String(id) },
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const product = await prisma.product.findFirst({
+      where: {
+        isDeleted: false,
+        OR: [
+          isUuid ? { id: String(id) } : undefined,
+          { slug: String(id) }
+        ].filter(Boolean) as any
+      },
       include: productInclude,
     });
-    if (!product || product.isDeleted) {
+    if (!product) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
     return res.json({ success: true, data: product });
@@ -189,10 +196,19 @@ export const getProductById = async (req: Request, res: Response) => {
 // Body: { name?, basePrice?, category?, displayCategory?, imageUrl?, images?, description?, status? }
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateProduct = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   try {
-    const product = await prisma.product.findUnique({ where: { id: String(id) } });
-    if (!product || product.isDeleted) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const product = await prisma.product.findFirst({
+      where: {
+        isDeleted: false,
+        OR: [
+          isUuid ? { id: String(id) } : undefined,
+          { slug: String(id) }
+        ].filter(Boolean) as any
+      }
+    });
+    if (!product) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
 
@@ -215,7 +231,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     const updated = await prisma.product.update({
-      where: { id: String(id) },
+      where: { id: product.id },
       data: {
         ...(name !== undefined && { name, slug }),
         ...(basePrice !== undefined && { basePrice: Number(basePrice) }),
@@ -245,13 +261,22 @@ export const updateProduct = async (req: Request, res: Response) => {
 // Soft delete — sets isDeleted: true.
 // ─────────────────────────────────────────────────────────────────────────────
 export const deleteProduct = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   try {
-    const product = await prisma.product.findUnique({ where: { id: String(id) } });
-    if (!product || product.isDeleted) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const product = await prisma.product.findFirst({
+      where: {
+        isDeleted: false,
+        OR: [
+          isUuid ? { id: String(id) } : undefined,
+          { slug: String(id) }
+        ].filter(Boolean) as any
+      }
+    });
+    if (!product) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
-    await prisma.product.update({ where: { id: String(id) }, data: { isDeleted: true } });
+    await prisma.product.update({ where: { id: product.id }, data: { isDeleted: true } });
     return res.status(200).json({ success: true, message: ErrorMessage.PRODUCT_DELETED });
   } catch (error) {
     console.error('Delete product error:', error);

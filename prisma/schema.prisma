@@ -60,6 +60,7 @@ model users {
 enum ProductStatus {
   DRAFT // Hidden from public listings
   PUBLISHED // Visible to all
+  ARCHIVED // Archived product
 }
 
 model Product {
