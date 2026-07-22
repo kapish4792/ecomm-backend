@@ -18,6 +18,7 @@ export const CreateVariantSchema = z.object({
       z.string().regex(/^\d+(\.\d{1,2})?$/, ErrorMessage.PRICE_INVALID),
     ]),
     stock:      z.number().int().nonnegative(ErrorMessage.STOCK_NEGATIVE).default(0),
+    images:     z.array(z.string().trim()).default([]),
     attributes: z.array(AttributeInputSchema).min(1, 'At least one attribute is required'),
   }),
 });
@@ -34,6 +35,7 @@ export const UpdateVariantSchema = z.object({
       z.string().regex(/^\d+(\.\d{1,2})?$/, ErrorMessage.PRICE_INVALID),
     ]).optional(),
     stock:      z.number().int().nonnegative(ErrorMessage.STOCK_NEGATIVE).optional(),
+    images:     z.array(z.string().trim()).optional(),
     attributes: z.array(AttributeInputSchema).optional(), // full replace if provided
   }),
 });

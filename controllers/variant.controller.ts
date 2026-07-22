@@ -106,7 +106,7 @@ export const getVariantById = async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export const createVariant = async (req: Request, res: Response) => {
   const { productId } = req.params;
-  const { sku, price, stock, attributes } = req.body;
+  const { sku, price, stock, images, attributes } = req.body;
 
   try {
     const product = await prisma.product.findUnique({ where: { id: String(productId) } });
@@ -120,8 +120,9 @@ export const createVariant = async (req: Request, res: Response) => {
       data: {
         productId: String(productId),
         sku,
-        price:  Number(price),
-        stock:  stock ?? 0,
+        price:   Number(price),
+        stock:   stock ?? 0,
+        images:  images ?? [],
         attributes: {
           create: attrValueIds.map((avId) => ({ attributeValueId: avId })),
         },
@@ -147,7 +148,7 @@ export const createVariant = async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateVariant = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { sku, price, stock, attributes } = req.body;
+  const { sku, price, stock, images, attributes } = req.body;
 
   try {
     const variant = await prisma.productVariant.findUnique({ where: { id: String(id) } });
@@ -166,9 +167,10 @@ export const updateVariant = async (req: Request, res: Response) => {
         await tx.productVariant.update({
           where: { id: String(id) },
           data: {
-            ...(sku   !== undefined && { sku }),
-            ...(price !== undefined && { price: Number(price) }),
-            ...(stock !== undefined && { stock }),
+            ...(sku      !== undefined && { sku }),
+            ...(price    !== undefined && { price: Number(price) }),
+            ...(stock    !== undefined && { stock }),
+            ...(images !== undefined && { images }),
             attributes: {
               create: newAttrValueIds.map((avId) => ({ attributeValueId: avId })),
             },
@@ -183,6 +185,7 @@ export const updateVariant = async (req: Request, res: Response) => {
           ...(sku   !== undefined && { sku }),
           ...(price !== undefined && { price: Number(price) }),
           ...(stock !== undefined && { stock }),
+          ...(images !== undefined && { images }),
         },
       });
     }

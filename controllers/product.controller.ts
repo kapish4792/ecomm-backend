@@ -88,13 +88,14 @@ export const createProduct = async (req: Request, res: Response) => {
     const primaryCategory = dbCategories[0]?.slug || categoryInputs[0] || '';
 
     // Resolve all attribute values up front (outside transaction to avoid long lock)
-    const resolvedVariants: { sku: string; price: number; stock: number; attrValueIds: string[] }[] = [];
+    const resolvedVariants: { sku: string; price: number; stock: number; images: string[]; attrValueIds: string[] }[] = [];
     for (const v of variants) {
       const attrValueIds = await resolveAttributeValueIds(v.attributes ?? []);
       resolvedVariants.push({
         sku: v.sku,
         price: Number(v.price),
         stock: v.stock ?? 0,
+        images: v.images ?? [],
         attrValueIds,
       });
     }
@@ -120,6 +121,7 @@ export const createProduct = async (req: Request, res: Response) => {
               sku: v.sku,
               price: v.price,
               stock: v.stock,
+              images: v.images,
               attributes: {
                 create: v.attrValueIds.map((avId) => ({ attributeValueId: avId })),
               },

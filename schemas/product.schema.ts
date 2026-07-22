@@ -15,6 +15,7 @@ export const ProductVariantSchema = z.object({
     z.string().regex(/^\d+(\.\d{1,2})?$/, ErrorMessage.PRICE_INVALID),
   ]),
   stock:      z.number().int().nonnegative(ErrorMessage.STOCK_NEGATIVE).default(0),
+  images:     z.array(z.string().trim()).default([]),
   attributes: z.array(VariantAttributeInputSchema).min(1, 'At least one attribute is required per variant'),
 });
 
