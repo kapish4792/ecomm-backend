@@ -24,6 +24,9 @@ export const ErrorCode = {
   RATE_LIMITED:         'RATE_LIMITED',       // 429 — per-user rate limit exceeded
   LOCK_UNAVAILABLE:     'LOCK_UNAVAILABLE',   // 503 — product locked by concurrent request
 
+  // Category
+  INACTIVE_CATEGORY:    'INACTIVE_CATEGORY',  // 400 — category is inactive
+
   // Webhook
   WEBHOOK_INVALID:      'WEBHOOK_INVALID',    // 401 — invalid webhook signature
 } as const;

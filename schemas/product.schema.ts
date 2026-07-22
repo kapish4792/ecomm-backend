@@ -26,14 +26,21 @@ export const CreateProductSchema = z.object({
       z.number().positive(ErrorMessage.PRICE_POSITIVE),
       z.string().regex(/^\d+(\.\d{1,2})?$/, ErrorMessage.PRICE_INVALID),
     ]),
-    category:        z.string().trim().min(1, ErrorMessage.CATEGORY_REQUIRED),
+    category:        z.string().trim().optional(),
+    categories:      z.array(z.string().trim()).optional(),
     displayCategory: z.string().trim().optional().nullable(),
     imageUrl:        z.string().trim().optional().default(''),
     images:          z.array(z.string().trim()).default([]),
     description:     z.string().trim().min(1, ErrorMessage.DESCRIPTION_REQUIRED),
     status:          z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional().default('DRAFT'),
     variants:        z.array(ProductVariantSchema).min(1, ErrorMessage.VARIANTS_MIN_LENGTH),
-  }),
+  }).refine(
+    (data) => (data.category && data.category.length > 0) || (data.categories && data.categories.length > 0),
+    {
+      message: "At least one category is required (via 'category' or 'categories')",
+      path: ["categories"],
+    }
+  ),
 });
 
 // ── PUT /api/products/:id ────────────────────────────────────────────────────
@@ -48,6 +55,7 @@ export const UpdateProductSchema = z.object({
       z.string().regex(/^\d+(\.\d{1,2})?$/, ErrorMessage.PRICE_INVALID),
     ]).optional(),
     category:        z.string().trim().min(1, ErrorMessage.CATEGORY_EMPTY).optional(),
+    categories:      z.array(z.string().trim()).optional(),
     displayCategory: z.string().trim().optional().nullable(),
     imageUrl:        z.string().trim().min(1, ErrorMessage.IMAGE_URL_EMPTY).optional(),
     images:          z.array(z.string().trim()).optional(),

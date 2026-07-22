@@ -28,6 +28,9 @@ async function resolveAttributeValueIds(
 
 // ── Prisma include shape reused across all product queries ───────────────────
 const productInclude = {
+  categories: {
+    where: { isActive: true },
+  },
   variants: {
     include: {
       attributes: {
@@ -51,6 +54,7 @@ export const createProduct = async (req: Request, res: Response) => {
     const {
       name, basePrice, category, displayCategory,
       imageUrl, images, description, status, variants,
+      categories,
     } = req.body;
 
     // Generate unique slug
@@ -66,6 +70,22 @@ export const createProduct = async (req: Request, res: Response) => {
       while (existingSlugs.includes(`${baseSlug}-${count}`)) count++;
       slug = `${baseSlug}-${count}`;
     }
+
+    // Resolve categories
+    const categoryInputs: string[] = [];
+    if (Array.isArray(categories)) {
+      categoryInputs.push(...categories.map((c) => String(c).trim()));
+    } else if (category) {
+      categoryInputs.push(String(category).trim());
+    }
+
+    const dbCategories = await prisma.category.findMany({
+      where: {
+        slug: { in: categoryInputs },
+      },
+    });
+
+    const primaryCategory = dbCategories[0]?.slug || categoryInputs[0] || '';
 
     // Resolve all attribute values up front (outside transaction to avoid long lock)
     const resolvedVariants: { sku: string; price: number; stock: number; attrValueIds: string[] }[] = [];
@@ -86,12 +106,15 @@ export const createProduct = async (req: Request, res: Response) => {
           name,
           slug,
           basePrice: Number(basePrice),
-          category,
+          category: primaryCategory,
           displayCategory: displayCategory ?? null,
           imageUrl: imageUrl ?? '',
           images: images ?? [],
           description,
           status: status ?? 'DRAFT',
+          categories: {
+            connect: dbCategories.map((cat) => ({ id: cat.id })),
+          },
           variants: {
             create: resolvedVariants.map((v) => ({
               sku: v.sku,
@@ -212,7 +235,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.PRODUCT_NOT_FOUND);
     }
 
-    const { name, basePrice, category, displayCategory, imageUrl, images, description, status } = req.body;
+    const { name, basePrice, category, displayCategory, imageUrl, images, description, status, categories } = req.body;
 
     // Regenerate slug if name changed
     let slug = product.slug;
@@ -230,12 +253,35 @@ export const updateProduct = async (req: Request, res: Response) => {
       }
     }
 
+    let categoryUpdateData = {};
+    if (categories !== undefined || category !== undefined) {
+      const categoryInputs: string[] = [];
+      if (Array.isArray(categories)) {
+        categoryInputs.push(...categories.map((c) => String(c).trim()));
+      } else if (category) {
+        categoryInputs.push(String(category).trim());
+      }
+
+      const dbCategories = await prisma.category.findMany({
+        where: {
+          slug: { in: categoryInputs },
+        },
+      });
+
+      categoryUpdateData = {
+        category: dbCategories[0]?.slug || categoryInputs[0] || '',
+        categories: {
+          set: dbCategories.map((cat) => ({ id: cat.id })),
+        },
+      };
+    }
+
     const updated = await prisma.product.update({
       where: { id: product.id },
       data: {
         ...(name !== undefined && { name, slug }),
         ...(basePrice !== undefined && { basePrice: Number(basePrice) }),
-        ...(category !== undefined && { category }),
+        ...categoryUpdateData,
         ...(displayCategory !== undefined && { displayCategory }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(images !== undefined && { images }),

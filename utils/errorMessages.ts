@@ -102,6 +102,7 @@ export const ErrorMessage = {
 
   // ─── Category ──────────────────────────────────────────────────────────────
   CATEGORY_NOT_FOUND:          'Category not found',
+  CATEGORY_INACTIVE:           'This category is currently inactive',
   CATEGORY_ALREADY_EXISTS:     'A category with this name or slug already exists',
   FETCH_CATEGORIES_FAILED:     'Failed to fetch categories',
   CREATE_CATEGORY_FAILED:      'Failed to create category',

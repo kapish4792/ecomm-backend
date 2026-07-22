@@ -18,6 +18,8 @@ export const listCategories = async (req: Request, res: Response) => {
     const where: any = {};
     if (isActive !== undefined) {
       where.isActive = isActive;
+    } else {
+      where.isActive = true;
     }
 
     const [categories, total] = await prisma.$transaction([
@@ -84,6 +86,9 @@ export const getCategoryProducts = async (req: Request, res: Response) => {
     if (!category) {
       return sendError(res, 404, ErrorCode.NOT_FOUND, ErrorMessage.CATEGORY_NOT_FOUND);
     }
+    if (!category.isActive) {
+      return sendError(res, 400, ErrorCode.INACTIVE_CATEGORY, ErrorMessage.CATEGORY_INACTIVE);
+    }
 
     const { page, limit } = req.query as any;
     const pageNum = Number(page) || 1;
@@ -91,7 +96,15 @@ export const getCategoryProducts = async (req: Request, res: Response) => {
     const skip = (pageNum - 1) * limitNum;
     const take = limitNum;
 
-    const where = { categoryId: id, isDeleted: false, status: 'PUBLISHED' as const };
+    const where = {
+      categories: {
+        some: {
+          id: id
+        }
+      },
+      isDeleted: false,
+      status: 'PUBLISHED' as const
+    };
 
     const [products, total] = await prisma.$transaction([
       prisma.product.findMany({
