@@ -1,11 +1,20 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import cookieParser from "cookie-parser";
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
+
+// ── Route Imports ────────────────────────────────────────────────────────────
 import authRoutes from './routes/auth.ts';
 import productRoutes from './routes/product.ts';
 import variantRoutes from './routes/variant.ts';
 import attributeRoutes from './routes/attribute.ts';
+import categoryRoutes from './routes/category.ts';
+import orderRoutes from './routes/order.ts';
+import uploadRoutes from './routes/upload.ts';
+import addressRoutes from './routes/address.ts';
+import path from 'path';
+import { uploadDir } from './middleware/upload.ts';
+
 
 dotenv.config();
 
@@ -13,6 +22,9 @@ const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 8080;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOBAL MIDDLEWARE
+// ─────────────────────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(cookieParser());
 app.use(
@@ -22,11 +34,29 @@ app.use(
   })
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// API ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api', variantRoutes);
 app.use('/api', attributeRoutes);
+app.use('/api/categories', categoryRoutes);
 
+// Address API — User Address Management
+app.use('/api/addresses', addressRoutes);
+
+// Order API — State Machine
+app.use('/api/orders', orderRoutes);
+
+// Upload API — File Management
+app.use('/api/upload', uploadRoutes);
+app.use('/uploads', express.static(path.resolve(uploadDir)));
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// START SERVER
+// ─────────────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

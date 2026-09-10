@@ -50,49 +50,129 @@ model users {
   refresh_tokens refresh_tokens[]
   orders         Order[]
   transactions   Transaction[]
+  mediaFiles     MediaFile[]
+  addresses      Address[]
+}
+
+enum AddressType {
+  HOME
+  WORK
+  OTHER
+}
+
+model Address {
+  id           String      @id @default(cuid())
+  user_id      Int?
+  type         AddressType @default(HOME)
+  fullName     String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  landmark     String?
+  city         String
+  state        String
+  country      String
+  postalCode   String
+  isDefault    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  users        users?      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
 }
 
 // ==========================================
-// 2. PRODUCT CATALOG (WITH VARIANTS)
+// 2. PRODUCT CATALOG — EAV HYBRID MODEL
 // ==========================================
+
+enum ProductStatus {
+  DRAFT // Hidden from public listings
+  PUBLISHED // Visible to all
+  ARCHIVED // Archived product
+}
 
 model Product {
-  id              String           @id @default(uuid())
-  name            String
-  slug            String           @unique
-  price           Decimal          @db.Decimal(12, 2)
-  category        String
-  displayCategory String?
-  imageUrl        String
-  images          String[]         @default([])
-  description     String           @db.Text
-  attributes      Attribute[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  isDeleted       Boolean          @default(false)
-  variants        ProductVariant[]
+  id               String           @id @default(uuid())
+  name             String
+  slug             String           @unique
+  basePrice        Decimal          @db.Decimal(12, 2) // Display / listing price
+  category         String
+  displayCategory  String?
+  imageUrl         String           @default("")
+  images           String[]         @default([])
+  description      String           @db.Text
+  status           ProductStatus    @default(DRAFT) // DRAFT = hidden, PUBLISHED = visible
+  isDeleted        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  variants         ProductVariant[]
+  categories       Category[]
 
   @@index([category])
+  @@index([status])
+  @@map("products")
 }
 
-model ProductVariant {
-  id         String      @id @default(uuid())
-  sku        String      @unique
-  size       String?
-  color      String?
-  stock      Int         @default(0)
-  productId  String
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems OrderItem[] // Relation link to purchased line items
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(100)
+  slug        String    @unique @db.VarChar(120) // URL-safe identifier
+  description String?   @db.Text
+  imageUrl    String?   @db.VarChar(500)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+
+  @@index([slug]) // fast slug-based lookups
+  @@index([isActive]) // fast active/inactive filtering
+  @@map("categories")
 }
 
 model Attribute {
-  id       String    @id @default(uuid())
-  key      String
-  value    String
-  products Product[]
+  id     String           @id @default(dbgenerated("concat('attr_', floor(random() * 90000 + 10000)::text)"))
+  name   String           @unique @db.VarChar(50)
+  values AttributeValue[]
 
-  @@unique([key, value])
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id          String                  @id @default(dbgenerated("concat('val_', floor(random() * 90000 + 10000)::text)"))
+  attributeId String
+  attribute   Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  value       String                  @db.VarChar(100)
+  variants    VariantAttributeValue[]
+
+  @@unique([attributeId, value])
+  @@map("attribute_values")
+}
+
+// The actual sellable item — each SKU is a unique combination of attribute values
+model ProductVariant {
+  id         String                  @id @default(dbgenerated("concat('var_', floor(random() * 90000 + 10000)::text)"))
+  productId  String
+  product    Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku        String                  @unique
+  price      Decimal                 @db.Decimal(12, 2)
+  stock      Int                     @default(0)
+  images     String[]                @default([])
+  createdAt  DateTime                @default(now())
+  attributes VariantAttributeValue[]
+  orderItems OrderItem[]
+
+  @@map("product_variants")
+}
+
+// Junction table — binds variants to their specific attribute value combinations
+model VariantAttributeValue {
+  variantId        String
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValueId String
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, attributeValueId])
+  @@map("variant_attribute_values")
 }
 
 // ==========================================
@@ -106,23 +186,36 @@ model Order {
   totalAmount     Decimal     @db.Decimal(12, 2) // Calculated subtotal + taxes + shipping
   shippingAddress Json // Immutable JSON snapshot of address block details at point of purchase
   status          OrderStatus @default(PENDING)
-  idempotencyKey  String?     @unique // Structural safeguard tracking unique frontend checkout generation keys
+  expiresAt       DateTime? // Auto-expiry timestamp for PENDING orders (15 min from creation)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   items        OrderItem[]
   transactions Transaction[]
+  events       OrderEvent[] // Full audit trail of state transitions
 
   @@map("orders")
 }
 
+// ==========================================
+// Order State Machine
+// PENDING → CONFIRMED, CANCELLED, FAILED
+// CONFIRMED → PROCESSING, CANCELLED
+// PROCESSING → SHIPPED, CANCELLED
+// SHIPPED → DELIVERED, RETURNED
+// DELIVERED → RETURNED
+// CANCELLED, FAILED, RETURNED → terminal
+// ==========================================
+
 enum OrderStatus {
   PENDING
-  PAYMENT_FAILED
   CONFIRMED
+  PROCESSING
   SHIPPED
   DELIVERED
   CANCELLED
+  FAILED
+  RETURNED
 }
 
 model OrderItem {
@@ -135,6 +228,39 @@ model OrderItem {
   priceAtPurchase  Decimal        @db.Decimal(12, 2) // CRITICAL: Immutable snapshot of the unit price at transaction execution time
 
   @@map("order_items")
+}
+
+// ==========================================
+// 3b. ORDER AUDIT EVENT LOG
+// ==========================================
+
+model OrderEvent {
+  id         String       @id @default(uuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus? // null for initial PENDING creation
+  toStatus   OrderStatus
+  reason     String?      @db.Text // Optional human-readable reason for the transition
+  actor      String?      @db.VarChar(100) // "system", "user:{id}", "webhook", "cron"
+  createdAt  DateTime     @default(now())
+
+  @@map("order_events")
+}
+
+// ==========================================
+// 3c. OUTBOX PATTERN — ASYNC EVENT QUEUE
+// ==========================================
+
+model OutboxEvent {
+  id          String   @id @default(uuid())
+  eventType   String   @db.VarChar(100) // e.g. "order.created", "order.expired", "stock.released"
+  aggregateId String   @db.VarChar(100) // Usually the orderId
+  payload     Json // Full event payload for downstream consumers
+  published   Boolean  @default(false) // Marks the event as picked up by the outbox processor
+  createdAt   DateTime @default(now())
+
+  @@index([published, createdAt])
+  @@map("outbox_events")
 }
 
 // ==========================================
@@ -169,26 +295,23 @@ enum TransactionStatus {
   SUCCESS
   FAILED
   REFUNDED
+  UNKNOWN // Payment status not yet confirmed — webhook reconciles
 }
 
 // ==========================================
-// 5. CACHED IDEMPOTENCY ENGINE LOGS
+// 5. MEDIA / FILE UPLOADS
 // ==========================================
 
-model IdempotencyRecord {
-  id             String            @id @default(uuid())
-  key            String            @unique // Unique Client generated token UUID string passed down via headers
-  requestPath    String // Verify matching routing execution path (e.g., "/api/checkout")
-  status         IdempotencyStatus @default(PROCESSING)
-  responseBody   Json? // Cached return object body tracking processed orders
-  responseStatus Int? // Cached response status codes
-  createdAt      DateTime          @default(now())
-  expiresAt      DateTime // Self cleaning trigger tracking limits (e.g., 24 hours lifecycle)
+model MediaFile {
+  id           String   @id @default(uuid())
+  originalName String   @db.VarChar(255)
+  filename     String   @db.VarChar(255)
+  fileUrl      String   @db.Text
+  mimeType     String   @db.VarChar(100)
+  size         Int
+  uploadedBy   Int?
+  user         users?   @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
 
-  @@map("idempotency_records")
-}
-
-enum IdempotencyStatus {
-  PROCESSING
-  COMPLETED
+  @@map("media_files")
 }
