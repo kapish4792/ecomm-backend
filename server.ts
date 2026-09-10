@@ -11,6 +11,7 @@ import attributeRoutes from './routes/attribute.ts';
 import categoryRoutes from './routes/category.ts';
 import orderRoutes from './routes/order.ts';
 import uploadRoutes from './routes/upload.ts';
+import addressRoutes from './routes/address.ts';
 import path from 'path';
 import { uploadDir } from './middleware/upload.ts';
 
@@ -41,6 +42,9 @@ app.use('/api/products', productRoutes);
 app.use('/api', variantRoutes);
 app.use('/api', attributeRoutes);
 app.use('/api/categories', categoryRoutes);
+
+// Address API — User Address Management
+app.use('/api/addresses', addressRoutes);
 
 // Order API — State Machine
 app.use('/api/orders', orderRoutes);

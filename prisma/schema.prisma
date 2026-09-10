@@ -51,6 +51,34 @@ model users {
   orders         Order[]
   transactions   Transaction[]
   mediaFiles     MediaFile[]
+  addresses      Address[]
+}
+
+enum AddressType {
+  HOME
+  WORK
+  OTHER
+}
+
+model Address {
+  id           String      @id @default(cuid())
+  user_id      Int?
+  type         AddressType @default(HOME)
+  fullName     String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  landmark     String?
+  city         String
+  state        String
+  country      String
+  postalCode   String
+  isDefault    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  users        users?      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
 }
 
 // ==========================================
