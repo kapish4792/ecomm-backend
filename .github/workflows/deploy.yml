@@ -18,7 +18,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.ECOMM_SSH_PRIVATE_KEY }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           timeout: 20m
           script: |
